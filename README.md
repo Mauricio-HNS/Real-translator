@@ -106,5 +106,34 @@ python main.py
 Se o microfone padrão não for o correto, ajuste em:
 `real_time_translator/audio/capture.py` no `device_index`.
 
-<img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
+## Modo Visual (Web, recomendado)
 
+Rodar interface com botões no navegador:
+
+```bash
+python main_web.py
+```
+
+Abrir:
+
+`http://127.0.0.1:7860`
+
+Botões disponíveis:
+- `Iniciar`
+- `Parar`
+- `Limpar`
+- `Atualizar`
+
+Listar microfones:
+
+```bash
+python main_web.py --list-mics
+```
+
+Escolher microfone:
+
+```bash
+python main_web.py --mic-index 1
+```
+
+<img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
