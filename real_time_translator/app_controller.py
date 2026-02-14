@@ -24,6 +24,7 @@ class AppController:
             )
         )
         self._running = False
+        self._starting = False
         self._status = "Ready"
         self._sensitivity_mode = "auto"
         self._manual_threshold = DEFAULT_CONFIG.energy_threshold
@@ -244,20 +245,30 @@ class AppController:
 
     def start(self) -> str:
         with self._lock:
-            if self._running:
+            if self._running or self._starting:
                 return self._status
+            self._starting = True
+            self._running = True
             self._status = "Calibrating microphone..."
 
-        if self._sensitivity_mode == "auto":
-            self._capture.smart_calibrate(passes=3, seconds=0.5)
-        else:
-            self._capture.calibrate()
-        self._capture.start(self._audio_callback)
-
-        with self._lock:
-            self._running = True
-            self._status = "Listening..."
-            return self._status
+        try:
+            if self._sensitivity_mode == "auto":
+                self._capture.smart_calibrate(passes=3, seconds=0.5)
+            else:
+                self._capture.calibrate()
+            self._capture.start(self._audio_callback)
+            with self._lock:
+                self._status = "Listening..."
+                self._starting = False
+                return self._status
+        except Exception as exc:  # noqa: BLE001
+            with self._lock:
+                self._running = False
+                self._starting = False
+                self._status = f"Start failed: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Start failed: {exc}")
+                self._events = self._events[-120:]
+                return self._status
 
     def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
         with self._lock:
@@ -309,6 +320,7 @@ class AppController:
             if not self._running:
                 return self._status
             self._running = False
+            self._starting = False
 
         self._capture.stop()
 

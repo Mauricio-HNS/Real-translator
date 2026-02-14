@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import audioop
+import threading
 from typing import Callable, Optional
 
 import speech_recognition as sr
@@ -16,7 +17,7 @@ class AudioCapture:
         self._recognizer.energy_threshold = config.energy_threshold
         self._recognizer.dynamic_energy_threshold = True
         self._recognizer.pause_threshold = 0.6
-        self._microphone = sr.Microphone(device_index=device_index)
+        self._op_lock = threading.Lock()
         self._stop_listening = None
 
     @property
@@ -24,11 +25,12 @@ class AudioCapture:
         return self._recognizer
 
     def calibrate(self) -> None:
-        with self._microphone as source:
-            self._recognizer.adjust_for_ambient_noise(
-                source,
-                duration=self._config.ambient_adjust_seconds,
-            )
+        with self._op_lock:
+            with sr.Microphone(device_index=self._device_index) as source:
+                self._recognizer.adjust_for_ambient_noise(
+                    source,
+                    duration=self._config.ambient_adjust_seconds,
+                )
 
     def smart_calibrate(self, passes: int = 3, seconds: float = 0.5) -> None:
         total_passes = max(1, min(6, int(passes)))
@@ -38,12 +40,14 @@ class AudioCapture:
 
     def probe_microphone_permission(self) -> None:
         # Opening the microphone stream triggers macOS permission prompt if needed.
-        with self._microphone as source:
-            self._recognizer.record(source, duration=0.2)
+        with self._op_lock:
+            with sr.Microphone(device_index=self._device_index) as source:
+                self._recognizer.record(source, duration=0.2)
 
     def recalibrate(self, seconds: float = 1.0) -> None:
-        with self._microphone as source:
-            self._recognizer.adjust_for_ambient_noise(source, duration=max(0.3, seconds))
+        with self._op_lock:
+            with sr.Microphone(device_index=self._device_index) as source:
+                self._recognizer.adjust_for_ambient_noise(source, duration=max(0.3, seconds))
 
     def set_sensitivity(
         self,
@@ -60,7 +64,11 @@ class AudioCapture:
             self._recognizer.dynamic_energy_threshold = True
 
     def start(self, callback: Callable[[sr.Recognizer, sr.AudioData], None]) -> None:
-        with self._microphone as source:
+        with self._op_lock:
+            if self._stop_listening is not None:
+                self._stop_listening(wait_for_stop=False)
+                self._stop_listening = None
+            source = sr.Microphone(device_index=self._device_index)
             self._stop_listening = self._recognizer.listen_in_background(
                 source,
                 callback,
@@ -69,20 +77,23 @@ class AudioCapture:
 
     def capture_level(self, seconds: float = 0.8) -> int:
         duration = max(0.2, min(3.0, float(seconds)))
-        with self._microphone as source:
-            audio = self._recognizer.record(source, duration=duration)
+        with self._op_lock:
+            with sr.Microphone(device_index=self._device_index) as source:
+                audio = self._recognizer.record(source, duration=duration)
         raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
         return int(audioop.rms(raw, 2))
 
     def listen_once(self, seconds: float = 2.5) -> sr.AudioData:
         duration = max(0.8, min(6.0, float(seconds)))
-        with self._microphone as source:
-            return self._recognizer.record(source, duration=duration)
+        with self._op_lock:
+            with sr.Microphone(device_index=self._device_index) as source:
+                return self._recognizer.record(source, duration=duration)
 
     def stop(self) -> None:
-        if self._stop_listening is not None:
-            self._stop_listening(wait_for_stop=False)
-            self._stop_listening = None
+        with self._op_lock:
+            if self._stop_listening is not None:
+                self._stop_listening(wait_for_stop=False)
+                self._stop_listening = None
 
     @staticmethod
     def list_microphones() -> list[str]:
