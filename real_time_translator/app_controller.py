@@ -280,23 +280,62 @@ class AppController:
             self._status = "Calibrating microphone..."
 
         try:
-            if self._sensitivity_mode == "auto":
-                self._capture.smart_calibrate(passes=3, seconds=0.5)
-            else:
-                self._capture.calibrate()
-            self._capture.start(self._audio_callback)
+            self._start_listening_sequence()
             with self._lock:
                 self._status = "Listening..."
                 self._starting = False
                 return self._status
         except Exception as exc:  # noqa: BLE001
+            # Recovery path: rebuild capture and retry once.
+            try:
+                self._capture.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
+                self._capture.set_sensitivity(
+                    mode=self._sensitivity_mode,
+                    manual_threshold=self._manual_threshold,
+                    pause_threshold=self._pause_threshold,
+                )
+                self._start_listening_sequence()
+                with self._lock:
+                    self._status = "Listening... (recovered)"
+                    self._starting = False
+                    self._events.append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Start recovered after {type(exc).__name__}: {exc!r}"
+                    )
+                    self._events = self._events[-120:]
+                    return self._status
+            except Exception as exc2:  # noqa: BLE001
+                err = f"{type(exc2).__name__}: {exc2!r}"
+                first = f"{type(exc).__name__}: {exc!r}"
+                with self._lock:
+                    self._running = False
+                    self._starting = False
+                    self._status = f"Start failed ({err})"
+                    self._events.append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Start failed. first={first} second={err}"
+                    )
+                    self._events = self._events[-120:]
+                    return self._status
+
+            # Defensive fallback (should not reach here)
             with self._lock:
                 self._running = False
                 self._starting = False
-                self._status = f"Start failed: {exc}"
-                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Start failed: {exc}")
+                err = f"{type(exc).__name__}: {exc!r}"
+                self._status = f"Start failed ({err})"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Start failed: {err}")
                 self._events = self._events[-120:]
                 return self._status
+
+    def _start_listening_sequence(self) -> None:
+        if self._sensitivity_mode == "auto":
+            self._capture.smart_calibrate(passes=3, seconds=0.5)
+        else:
+            self._capture.calibrate()
+        self._capture.start(self._audio_callback)
 
     def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
         with self._lock:
