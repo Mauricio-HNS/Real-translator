@@ -226,7 +226,7 @@ class AppController:
                     self._last_level = level
                 self._auto_adjust_for_distance(level)
 
-            original = self._stt.transcribe(recognizer, audio)
+            original = self._transcribe_far_field(recognizer, audio, level)
             if not original:
                 return
             translated = self._translator.translate(original)
@@ -287,9 +287,9 @@ class AppController:
 
     def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
         meters = max(0.6, min(1.5, float(target_meters)))
-        # For ~1m speech we need higher sensitivity (lower threshold) with fast auto adaptation.
-        base_threshold = int(220 + (meters - 1.0) * 140)
-        pause = 0.45 if meters <= 1.0 else 0.5
+        # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
+        base_threshold = int(170 + (meters - 1.0) * 120)
+        pause = 0.42 if meters <= 1.0 else 0.48
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
             self._events.append(
@@ -304,6 +304,33 @@ class AppController:
             return int(audioop.rms(raw, 2))
         except Exception:  # noqa: BLE001
             return 0
+
+    def _transcribe_far_field(self, recognizer: sr.Recognizer, audio: sr.AudioData, level: int) -> str:
+        enhanced = self._prepare_audio_for_stt(audio, level)
+        try:
+            return self._stt.transcribe(recognizer, enhanced)
+        except sr.UnknownValueError:
+            # Fallback to raw audio if the enhanced signal over-amplified ambient noise.
+            return self._stt.transcribe(recognizer, audio)
+
+    def _prepare_audio_for_stt(self, audio: sr.AudioData, level: int) -> sr.AudioData:
+        try:
+            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+            gain = 1.0
+            if level < 90:
+                gain = 2.8
+            elif level < 140:
+                gain = 2.2
+            elif level < 220:
+                gain = 1.7
+            elif level < 320:
+                gain = 1.3
+            if gain <= 1.0:
+                return sr.AudioData(raw, 16000, 2)
+            boosted = audioop.mul(raw, 2, gain)
+            return sr.AudioData(boosted, 16000, 2)
+        except Exception:  # noqa: BLE001
+            return audio
 
     def _auto_adjust_for_distance(self, level: int) -> None:
         with self._lock:
