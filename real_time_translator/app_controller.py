@@ -14,7 +14,8 @@ from real_time_translator.translation.translator import Translator
 
 class AppController:
     def __init__(self, mic_index: int | None = None) -> None:
-        self._capture = AudioCapture(DEFAULT_CONFIG, device_index=mic_index)
+        self._mic_index = mic_index
+        self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
         self._stt = GoogleSTTProvider(language=DEFAULT_CONFIG.source_speech_language)
         self._translator = Translator(
             GoogleTranslationProvider(
@@ -39,6 +40,54 @@ class AppController:
     @staticmethod
     def list_microphones() -> list[str]:
         return AudioCapture.list_microphones()
+
+    @property
+    def mic_index(self) -> int | None:
+        return self._mic_index
+
+    def set_microphone(self, mic_index: int | None) -> str:
+        with self._lock:
+            if self._running:
+                return "Stop listening before changing microphone."
+            self._mic_index = mic_index
+            self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
+            self._capture.set_sensitivity(
+                mode=self._sensitivity_mode,
+                manual_threshold=self._manual_threshold,
+                pause_threshold=self._pause_threshold,
+            )
+            self._status = f"Microphone set to index: {self._mic_index if self._mic_index is not None else 'default'}"
+            return self._status
+
+    def auto_select_microphone(self) -> str:
+        names = self.list_microphones()
+        if not names:
+            with self._lock:
+                self._status = "No microphone detected."
+                return self._status
+
+        for index in range(len(names)):
+            try:
+                probe = AudioCapture(DEFAULT_CONFIG, device_index=index)
+                probe.probe_microphone_permission()
+                return self.set_microphone(index)
+            except Exception:  # noqa: BLE001
+                continue
+
+        with self._lock:
+            self._status = "Could not open any microphone input."
+            return self._status
+
+    def test_microphone_level(self, seconds: float = 1.0) -> str:
+        try:
+            level = self._capture.capture_level(seconds=seconds)
+            with self._lock:
+                self._status = f"Mic level={level} (good speech usually > 250)"
+                return self._status
+        except Exception as exc:  # noqa: BLE001
+            with self._lock:
+                self._status = f"Mic test failed: {exc}"
+                return self._status
 
     def request_microphone_access(self) -> str:
         try:

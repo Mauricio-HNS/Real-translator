@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import audioop
 from typing import Callable, Optional
 
 import speech_recognition as sr
@@ -65,6 +66,13 @@ class AudioCapture:
                 callback,
                 phrase_time_limit=self._config.phrase_time_limit_seconds,
             )
+
+    def capture_level(self, seconds: float = 0.8) -> int:
+        duration = max(0.2, min(3.0, float(seconds)))
+        with self._microphone as source:
+            audio = self._recognizer.listen(source, timeout=duration + 1.0, phrase_time_limit=duration)
+        raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+        return int(audioop.rms(raw, 2))
 
     def stop(self) -> None:
         if self._stop_listening is not None:
