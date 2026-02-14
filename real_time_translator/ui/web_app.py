@@ -10,12 +10,12 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     auto_boot_done = {"value": False}
     ui_css = """
     :root {
-      --bg: #23242b;
-      --bg-soft: #2b2d36;
-      --card: #2d2f39;
-      --card-2: #262832;
-      --text: #dde3ef;
-      --muted: #9da7bc;
+      --bg: #1f2129;
+      --bg-soft: #2a2d37;
+      --card: #2b2e39;
+      --card-2: #242733;
+      --text: #e6ecf8;
+      --muted: #a9b4ca;
       --green: #27c87a;
       --green-glow: rgba(39, 200, 122, 0.65);
       --shadow-dark: #1a1c24;
@@ -25,9 +25,9 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       --orange: #ff9f66;
     }
     .gradio-container {
-      background: radial-gradient(circle at 30% -10%, #3a3d4c, #24262f 45%, #1f2028 100%);
+      background: radial-gradient(circle at 20% -8%, #383c4c, #242732 42%, #1d1f28 100%);
       color: var(--text);
-      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-family: "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif;
       max-width: 100vw !important;
       width: 100vw !important;
       padding: 0 !important;
@@ -42,23 +42,27 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     .gradio-container .block {
       background: var(--card);
       border: none !important;
-      border-radius: 18px !important;
-      box-shadow: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light) !important;
+      border-radius: 16px !important;
+      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px #343845 !important;
+      border: 1px solid rgba(175, 190, 220, 0.08) !important;
     }
     .gradio-container textarea, .gradio-container input {
       background: var(--card-2) !important;
       border: none !important;
-      border-radius: 14px !important;
+      border-radius: 12px !important;
       box-shadow: inset 5px 5px 10px #1f2129, inset -5px -5px 10px #373b48 !important;
       color: #eff4ff !important;
+      font-size: 14px !important;
+      line-height: 1.4 !important;
     }
     .gradio-container button {
       border: none !important;
-      border-radius: 14px !important;
+      border-radius: 12px !important;
       font-weight: 700 !important;
       box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light) !important;
       background: linear-gradient(160deg, #363948, #252833) !important;
       color: #d6deef !important;
+      min-height: 42px !important;
     }
     .gradio-container button.primary {
       background: linear-gradient(160deg, #23b95f, #13874a) !important;
@@ -72,8 +76,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     #theme-shell {
       padding: 12px;
       border-radius: 0;
-      background: linear-gradient(165deg, #2f313d, #252732);
-      box-shadow: inset 1px 1px 0 #4a4e61, inset -1px -1px 0 #1d2029, 12px 12px 30px #191b23;
+      background: linear-gradient(165deg, #2d303c, #242733);
+      box-shadow: inset 1px 1px 0 #4a4e61, inset -1px -1px 0 #1d2029;
       border: none;
       width: 100%;
       max-width: 100%;
@@ -97,10 +101,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     }
     #eq-strip {
       margin: 2px 0 10px 0;
-      padding: 12px 14px;
-      background: linear-gradient(180deg, #2a2c35, #20222b);
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #2a2c37, #1f222c);
       border-radius: 16px;
-      box-shadow: inset 4px 4px 10px #1a1c23, inset -4px -4px 10px #333644;
+      box-shadow: inset 3px 3px 8px #1a1c23, inset -3px -3px 8px #333644;
+      border: 1px solid rgba(170, 190, 235, 0.08);
     }
     .eq-bars {
       display: grid;
@@ -146,7 +151,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       box-shadow: 9px 9px 20px #171922, -7px -7px 15px #3a3e4e, inset 1px 1px 0 #4b4f62;
       position: relative;
       transition: transform 0.2s ease;
-      animation: knob-spin 3.8s linear infinite;
+      animation: knob-spin 6.5s linear infinite;
     }
     .neo-knob::after {
       content: "";
@@ -159,8 +164,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       background: linear-gradient(180deg, var(--cyan), #4a9dff);
       box-shadow: 0 0 12px rgba(91, 213, 255, 0.8);
     }
-    .knob-two { animation-duration: 4.5s; }
-    .knob-three { animation-duration: 2.9s; animation-direction: reverse; }
+    .knob-two { animation-duration: 7.2s; }
+    .knob-three { animation-duration: 5.4s; animation-direction: reverse; }
     .neo-label {
       margin-top: 9px;
       color: var(--muted);
@@ -196,8 +201,9 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     #title-main h1 {
       text-shadow: 0 0 18px rgba(150, 170, 255, 0.25);
       font-weight: 700;
-      font-size: 28px !important;
+      font-size: 30px !important;
       margin-bottom: 4px !important;
+      letter-spacing: 0.8px !important;
     }
     @media (max-height: 860px) {
       #bottom-deco { display: none; }
@@ -311,6 +317,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     with gr.Blocks(title="Real-Time Translator", css=ui_css) as app:
         with gr.Column(elem_id="theme-shell"):
             gr.Markdown("# Real-Time Translator", elem_id="title-main")
+            gr.HTML("<div style='color:#9fb0cc;font-size:13px;margin:-6px 0 6px 2px;letter-spacing:0.5px;'>Live Call Translation Console</div>")
             spectrum_top = gr.HTML(value="<div id='eq-strip'><div class='eq-bars'></div></div>")
 
             power_status = gr.HTML(elem_id="power-led")
