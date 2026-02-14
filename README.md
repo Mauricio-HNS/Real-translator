@@ -123,14 +123,7 @@ Botões disponíveis:
 - `OFF`
 - `Calibrar`
 - `Aplicar Sensibilidade`
-
-Presets de ambiente:
-- `tv_noise` (recomendado para TV/fundo)
-- `quiet_room`
-- `street_noise`
-
-Auto setup:
-- ao abrir a página, o app tenta permissão de microfone, seleciona automaticamente o melhor dispositivo (priorizando microfone interno do Mac), aplica preset e recalibra.
+- Painel inferior: `Logs do Programa` (erros e eventos em tempo real)
 
 Listar microfones:
 
@@ -147,8 +140,8 @@ python main_web.py --mic-index 1
 ### Dica para ruído de fundo (TV)
 1. Deixe em `manual`.
 2. Comece com `Threshold manual` entre `800` e `1300`.
-3. Clique `Recalibrar Ambiente` com você em silêncio por 1-2s.
-4. Clique `Iniciar` e teste.
+3. Clique `Calibrar` com você em silêncio por 1-2s.
+4. Clique `ON` e teste.
 
 ## Modo Produto (Desktop)
 
