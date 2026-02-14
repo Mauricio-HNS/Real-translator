@@ -18,7 +18,8 @@ class AudioCapture:
         self._recognizer.dynamic_energy_threshold = True
         self._recognizer.pause_threshold = 0.6
         self._op_lock = threading.Lock()
-        self._stop_listening = None
+        self._worker_stop = threading.Event()
+        self._worker_thread: Optional[threading.Thread] = None
 
     @property
     def recognizer(self) -> sr.Recognizer:
@@ -64,16 +65,25 @@ class AudioCapture:
             self._recognizer.dynamic_energy_threshold = True
 
     def start(self, callback: Callable[[sr.Recognizer, sr.AudioData], None]) -> None:
-        with self._op_lock:
-            if self._stop_listening is not None:
-                self._stop_listening(wait_for_stop=False)
-                self._stop_listening = None
-            source = sr.Microphone(device_index=self._device_index)
-            self._stop_listening = self._recognizer.listen_in_background(
-                source,
-                callback,
-                phrase_time_limit=self._config.phrase_time_limit_seconds,
-            )
+        self.stop()
+        self._worker_stop.clear()
+
+        def loop() -> None:
+            while not self._worker_stop.is_set():
+                try:
+                    with self._op_lock:
+                        with sr.Microphone(device_index=self._device_index) as source:
+                            audio = self._recognizer.record(
+                                source,
+                                duration=max(0.8, float(self._config.phrase_time_limit_seconds)),
+                            )
+                    callback(self._recognizer, audio)
+                except Exception:
+                    if self._worker_stop.is_set():
+                        break
+
+        self._worker_thread = threading.Thread(target=loop, daemon=True, name="audio-capture-loop")
+        self._worker_thread.start()
 
     def capture_level(self, seconds: float = 0.8) -> int:
         duration = max(0.2, min(3.0, float(seconds)))
@@ -90,10 +100,11 @@ class AudioCapture:
                 return self._recognizer.record(source, duration=duration)
 
     def stop(self) -> None:
-        with self._op_lock:
-            if self._stop_listening is not None:
-                self._stop_listening(wait_for_stop=False)
-                self._stop_listening = None
+        self._worker_stop.set()
+        thread = self._worker_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2.0)
+        self._worker_thread = None
 
     @staticmethod
     def list_microphones() -> list[str]:
