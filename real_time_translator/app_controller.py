@@ -327,6 +327,12 @@ class AppController:
                     lowered = max(85, current - 18)
                     if lowered != current:
                         self._capture.recognizer.energy_threshold = lowered
+                else:
+                    current = int(self._capture.recognizer.energy_threshold)
+                    lowered = max(85, current - 26)
+                    if lowered != current:
+                        self._capture.recognizer.energy_threshold = lowered
+                        self._manual_threshold = lowered
                 if self._unknown_counter % 4 == 0:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
@@ -374,7 +380,7 @@ class AppController:
         meters = max(0.6, min(1.5, float(target_meters)))
         # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
         base_threshold = int(70 + (meters - 1.0) * 90)
-        pause = 0.32 if meters <= 1.0 else 0.38
+        pause = 0.55 if meters <= 1.0 else 0.62
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
             self._events.append(

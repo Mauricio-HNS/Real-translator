@@ -215,7 +215,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         return refresh()
 
     def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
-        controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.45)
+        controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.60)
         return refresh()
 
     with gr.Blocks(title="Real-Time Translator", css=ui_css) as app:
