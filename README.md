@@ -119,6 +119,7 @@ Abrir:
 `http://127.0.0.1:7860`
 
 Botões disponíveis:
+- `Permitir Microfone` (dispara pedido de permissão no macOS)
 - `Iniciar`
 - `Parar`
 - `Limpar`
