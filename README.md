@@ -123,6 +123,8 @@ Botões disponíveis:
 - `Parar`
 - `Limpar`
 - `Atualizar`
+- `Aplicar Sensibilidade` (auto/manual)
+- `Recalibrar Ambiente` (isolar melhor ruído de TV/fundo)
 
 Listar microfones:
 
@@ -135,5 +137,11 @@ Escolher microfone:
 ```bash
 python main_web.py --mic-index 1
 ```
+
+### Dica para ruído de fundo (TV)
+1. Deixe em `manual`.
+2. Comece com `Threshold manual` entre `800` e `1300`.
+3. Clique `Recalibrar Ambiente` com você em silêncio por 1-2s.
+4. Clique `Iniciar` e teste.
 
 <img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
