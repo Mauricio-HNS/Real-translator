@@ -203,7 +203,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         return refresh()
 
     def on_start() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
-        controller.start_smart()
+        controller.start()
         return refresh()
 
     def on_stop() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
