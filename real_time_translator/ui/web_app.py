@@ -149,7 +149,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
     def _power_visual() -> tuple[str, dict, dict, dict]:
         running = controller.is_running()
-        label = "ON" if running else "OFF"
+        label = "LIGADO" if running else "DESLIGADO"
         color = "#18a55a" if running else "#5e6a63"
         glow = "0 0 6px rgba(24,165,90,0.75), 0 0 22px rgba(24,165,90,0.65)" if running else "none"
         badge = (
@@ -226,8 +226,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             power_status = gr.HTML(elem_id="power-led")
             status = gr.Textbox(label="Status", interactive=False, elem_id="status-box")
         with gr.Row():
-            on_btn = gr.Button("ON", variant="primary")
-            off_btn = gr.Button("OFF")
+            on_btn = gr.Button("LIGAR", variant="primary")
+            off_btn = gr.Button("DESLIGAR")
             calibrate_btn = gr.Button("Calibrar")
 
         sensitivity = gr.Slider(
