@@ -72,6 +72,15 @@ class AppController:
         with self._lock:
             if self._running:
                 return "Stop listening before changing microphone."
+            names = self.list_microphones()
+            if mic_index is not None and 0 <= mic_index < len(names):
+                if self._is_blocked_remote_mic(names[mic_index]):
+                    self._status = "Blocked remote microphone. Use the Mac built-in microphone."
+                    self._events.append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Blocked mic {mic_index} ({names[mic_index]})"
+                    )
+                    self._events = self._events[-120:]
+                    return self._status
             self._mic_index = mic_index
             self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
             self._capture.set_sensitivity(
@@ -80,7 +89,6 @@ class AppController:
                 pause_threshold=self._pause_threshold,
             )
             mic_label = "default"
-            names = self.list_microphones()
             if self._mic_index is not None and 0 <= self._mic_index < len(names):
                 mic_label = f"{self._mic_index} ({names[self._mic_index]})"
             self._status = f"Microphone set: {mic_label}"
@@ -93,7 +101,8 @@ class AppController:
                 self._status = "No microphone detected."
                 return self._status
 
-        for index in range(len(names)):
+        candidates = self._local_mic_candidates(names)
+        for index in candidates:
             try:
                 probe = AudioCapture(DEFAULT_CONFIG, device_index=index)
                 probe.probe_microphone_permission()
@@ -102,7 +111,7 @@ class AppController:
                 continue
 
         with self._lock:
-            self._status = "Could not open any microphone input."
+            self._status = "Could not open a local microphone input."
             return self._status
 
     def auto_scan_microphone(self, seconds: float = 0.9) -> str:
@@ -115,7 +124,13 @@ class AppController:
         best_idx = None
         best_score = -10_000
         best_level = -1
-        for index in range(len(names)):
+        candidates = self._local_mic_candidates(names)
+        if not candidates:
+            with self._lock:
+                self._status = "No local microphone available (remote devices blocked)."
+                return self._status
+
+        for index in candidates:
             try:
                 probe = AudioCapture(DEFAULT_CONFIG, device_index=index)
                 probe.probe_microphone_permission()
@@ -130,7 +145,7 @@ class AppController:
 
         if best_idx is None:
             with self._lock:
-                self._status = "Auto scan failed: no readable microphone."
+                self._status = "Auto scan failed: no readable local microphone."
                 return self._status
 
         self.set_microphone(best_idx)
@@ -154,6 +169,50 @@ class AppController:
         if any(k in text for k in ["airpods", "bluetooth", "headset"]):
             score -= 250
         return score
+
+    @staticmethod
+    def _is_blocked_remote_mic(name: str) -> bool:
+        text = (name or "").strip().lower()
+        blocked_tokens = [
+            "iphone",
+            "ios",
+            "continuity",
+            "airpods",
+            "bluetooth",
+            "headset",
+            "hands-free",
+            "earbuds",
+        ]
+        return any(token in text for token in blocked_tokens)
+
+    @staticmethod
+    def _is_preferred_local_mic(name: str) -> bool:
+        text = (name or "").strip().lower()
+        return any(token in text for token in ["macbook", "built-in", "builtin", "internal"])
+
+    def _local_mic_candidates(self, names: list[str]) -> list[int]:
+        preferred: list[int] = []
+        others: list[int] = []
+        blocked: list[int] = []
+
+        for index, name in enumerate(names):
+            if self._is_blocked_remote_mic(name):
+                blocked.append(index)
+                continue
+            if self._is_preferred_local_mic(name):
+                preferred.append(index)
+            else:
+                others.append(index)
+
+        if blocked:
+            with self._lock:
+                for idx in blocked:
+                    self._events.append(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Ignored remote mic {idx} ({names[idx]})."
+                    )
+                self._events = self._events[-120:]
+
+        return preferred + others
 
     def prepare_default(self) -> str:
         self.request_microphone_access()
