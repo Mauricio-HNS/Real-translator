@@ -135,6 +135,9 @@ Presets de ambiente:
 - `quiet_room`
 - `street_noise`
 
+Auto setup:
+- ao abrir a página, o app tenta permissão de microfone, seleciona automaticamente o melhor dispositivo (priorizando microfone interno do Mac), aplica preset e recalibra.
+
 Listar microfones:
 
 ```bash
