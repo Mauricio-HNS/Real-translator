@@ -288,8 +288,8 @@ class AppController:
     def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
         meters = max(0.6, min(1.5, float(target_meters)))
         # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
-        base_threshold = int(120 + (meters - 1.0) * 110)
-        pause = 0.38 if meters <= 1.0 else 0.44
+        base_threshold = int(95 + (meters - 1.0) * 100)
+        pause = 0.34 if meters <= 1.0 else 0.4
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
             self._events.append(
@@ -306,31 +306,49 @@ class AppController:
             return 0
 
     def _transcribe_far_field(self, recognizer: sr.Recognizer, audio: sr.AudioData, level: int) -> str:
-        enhanced = self._prepare_audio_for_stt(audio, level)
-        try:
-            return self._stt.transcribe(recognizer, enhanced)
-        except sr.UnknownValueError:
-            # Fallback to raw audio if the enhanced signal over-amplified ambient noise.
-            return self._stt.transcribe(recognizer, audio)
+        attempts = self._prepare_audio_attempts(audio, level)
+        last_unknown: Exception | None = None
+        for candidate in attempts:
+            try:
+                text = self._stt.transcribe(recognizer, candidate)
+                if text:
+                    return text
+            except sr.UnknownValueError as exc:
+                last_unknown = exc
+                continue
+        if last_unknown is not None:
+            raise last_unknown
+        return ""
 
-    def _prepare_audio_for_stt(self, audio: sr.AudioData, level: int) -> sr.AudioData:
+    def _prepare_audio_attempts(self, audio: sr.AudioData, level: int) -> list[sr.AudioData]:
+        attempts: list[sr.AudioData] = [audio]
+        for gain in self._gain_candidates(level):
+            boosted = self._boost_audio(audio, gain)
+            if boosted is not None:
+                attempts.append(boosted)
+        return attempts
+
+    @staticmethod
+    def _gain_candidates(level: int) -> list[float]:
+        if level < 80:
+            return [4.6, 3.4, 2.4]
+        if level < 130:
+            return [3.6, 2.8, 2.0]
+        if level < 220:
+            return [2.6, 1.9, 1.4]
+        if level < 340:
+            return [1.8, 1.4]
+        return [1.2]
+
+    def _boost_audio(self, audio: sr.AudioData, gain: float) -> sr.AudioData | None:
         try:
             raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
-            gain = 1.0
-            if level < 90:
-                gain = 3.6
-            elif level < 140:
-                gain = 2.8
-            elif level < 220:
-                gain = 2.0
-            elif level < 320:
-                gain = 1.5
             if gain <= 1.0:
-                return sr.AudioData(raw, 16000, 2)
+                return None
             boosted = audioop.mul(raw, 2, gain)
             return sr.AudioData(boosted, 16000, 2)
         except Exception:  # noqa: BLE001
-            return audio
+            return None
 
     def _auto_adjust_for_distance(self, level: int) -> None:
         with self._lock:
@@ -340,9 +358,9 @@ class AppController:
         current = int(recognizer.energy_threshold)
         updated = current
         if level < 100:
-            updated = max(85, current - 24)
+            updated = max(65, current - 30)
         elif level < 170:
-            updated = max(85, current - 12)
+            updated = max(65, current - 16)
         elif level > 1400:
             updated = min(1400, current + 30)
         elif level > 950:
