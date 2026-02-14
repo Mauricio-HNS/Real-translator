@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import audioop
 from array import array
+import re
 import threading
 import traceback
 from datetime import datetime
@@ -16,6 +17,15 @@ from real_time_translator.translation.translator import Translator
 
 
 class AppController:
+    _PT_SELF_HARM_RE = re.compile(
+        r"\b(se\s*mate|mate-?se|suic[ií]dio|suicidar|se\s*matar|tire\s+a\s+vida)\b",
+        re.IGNORECASE,
+    )
+    _EN_SELF_HARM_RE = re.compile(
+        r"\b(kill\s+yourself|suicide|end\s+your\s+life|harm\s+yourself|self-?harm)\b",
+        re.IGNORECASE,
+    )
+
     def __init__(self, mic_index: int | None = None) -> None:
         self._mic_index = mic_index
         self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
@@ -230,7 +240,7 @@ class AppController:
             original = self._transcribe_far_field(recognizer, audio, level)
             if not original:
                 return
-            translated = self._translator.translate(original)
+            translated = self._safe_translate(original)
             stamp = datetime.now().strftime("%H:%M:%S")
 
             with self._lock:
@@ -320,6 +330,27 @@ class AppController:
         if last_unknown is not None:
             raise last_unknown
         return ""
+
+    def _safe_translate(self, original: str) -> str:
+        translated = self._translator.translate(original)
+        if self._looks_like_harm_hallucination(original, translated):
+            stamp = datetime.now().strftime("%H:%M:%S")
+            with self._lock:
+                self._events.append(
+                    f"[{stamp}] Safety filter blocked unsafe translation; marked as uncertain."
+                )
+                self._events = self._events[-120:]
+            return "[Tradução incerta - repita a frase]"
+        return translated
+
+    def _looks_like_harm_hallucination(self, original: str, translated: str) -> bool:
+        if not translated:
+            return False
+        pt_harm = bool(self._PT_SELF_HARM_RE.search(translated))
+        if not pt_harm:
+            return False
+        en_harm = bool(self._EN_SELF_HARM_RE.search(original))
+        return not en_harm
 
     def _prepare_audio_attempts(self, audio: sr.AudioData, level: int) -> list[sr.AudioData]:
         attempts: list[sr.AudioData] = []
