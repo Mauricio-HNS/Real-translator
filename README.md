@@ -92,6 +92,19 @@ python main.py
 * Pode ser expandido para múltiplos idiomas, TTS ou gravação de histórico
 * Modularidade facilita troca de serviços STT ou APIs de tradução sem alterar UI
 
-<img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
+---
 
+## Execução Rápida (Mac/Linux)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+
+Se o microfone padrão não for o correto, ajuste em:
+`real_time_translator/audio/capture.py` no `device_index`.
+
+<img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
 
