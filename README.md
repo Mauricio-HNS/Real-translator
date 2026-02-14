@@ -1,129 +1,78 @@
+# Tradutor em Tempo Real (EN -> PT)
 
-<h1>Real-Time Translator</h1> 
+Aplicação para transcrever inglês e traduzir para português em tempo real, com interface Web e memória de correções.
 
-## Descrição
+## Instalação em 1 comando (GitHub)
 
-Programa de desktop em Python que captura áudio do microfone, converte voz em texto em tempo real (STT), traduz de inglês para português e exibe a tradução dinamicamente na tela. Ideal para quem precisa de tradução simultânea em reuniões, aulas ou conversas.
-
----
-
-## Funcionalidades
-
-* Captura contínua de áudio do microfone
-* Reconhecimento de voz em tempo real (STT)
-* Tradução automática de inglês para português
-* Exibição dinâmica do texto traduzido em uma interface gráfica
-* Modular e escalável (módulos separados para áudio, STT, tradução e UI)
-* Configurações fáceis de alterar (idioma, APIs, latência)
-
----
-
-## Estrutura do Projeto
-
-```
-real_time_translator/
-╭─ main.py                  # Ponto de entrada, coordena todos os módulos
-│
-├─ audio/ 📁
-│   ├─ capture.py            # Classe: AudioCapture → captura de áudio do microfone
-│   └─ utils.py              # Funções auxiliares de manipulação de áudio
-│
-├─ stt/ 📁
-│   ├─ whisper_stream.py     # Classe: WhisperSTT → transforma áudio em texto em tempo real
-│   └─ provider.py           # Integração com diferentes STT providers (Whisper, Google, Azure)
-│
-├─ translation/ 📁
-│   ├─ translator.py         # Classe: Translator → recebe texto do STT e traduz
-│   └─ provider.py           # Integração com APIs de tradução (GPT, DeepL, Google Translate)
-│
-├─ ui/ 📁
-│   ├─ window.py             # Classe: MainWindow → interface gráfica principal
-│   └─ widgets.py            # Widgets da interface (Labels, TextBoxes, Botões)
-│
-├─ config.py                 # Configurações gerais (chaves API, idiomas, latência)
-└─ requirements.txt          # Dependências Python
-```
-
----
-
-## Instalação
-
-1. Clone o repositório:
+No macOS/Linux, rode:
 
 ```bash
-git clone <repo_url>
-cd real_time_translator
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mauricio-HNS/Real-translator/main/scripts/install_and_run.sh)"
 ```
 
-2. Crie um ambiente virtual:
+O comando:
+- clona/atualiza o projeto,
+- cria `.venv`,
+- instala dependências,
+- inicia o servidor Web.
+
+Depois, abra no navegador:
+- `http://127.0.0.1:7892`
+
+## Instalação manual
 
 ```bash
-python -m venv venv
-source venv/bin/activate   # Linux / Mac
-venv\Scripts\activate      # Windows
-```
-
-3. Instale as dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Uso
-
-1. Configure suas chaves API em `config.py`
-2. Execute o programa:
-
-```bash
-python main.py
-```
-
-3. A interface abrirá e começará a capturar áudio automaticamente
-4. O texto reconhecido e traduzido aparecerá em tempo real na tela
-
----
-
-## Observações
-
-* Latência mínima é obtida com **streaming e blocos curtos de áudio**
-* STT e tradução funcionam melhor com conexões de internet estáveis
-* Pode ser expandido para múltiplos idiomas, TTS ou gravação de histórico
-* Modularidade facilita troca de serviços STT ou APIs de tradução sem alterar UI
-
----
-
-## Execução Rápida (Mac/Linux)
-
-```bash
+cd "/Users/mauriciohenrique/Documents/New project/Real-translator"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python main.py
+python main_web.py --host 127.0.0.1 --port 7892
 ```
 
-Se o microfone padrão não for o correto, ajuste em:
-`real_time_translator/audio/capture.py` no `device_index`.
+## Como usar
 
-## Modo Visual (Web, recomendado)
+1. Clique `LIGAR`.
+2. Clique `CALIBRAR` e fique em silêncio por ~2s.
+3. Fale em inglês.
+4. Veja a frase completa em `Inglês` e a tradução em `Português`.
 
-Rodar interface com botões no navegador:
+Parar:
+- `Ctrl + C` no terminal.
+
+## Como o programa aprende com usuários
+
+A interface tem:
+- `Aprender Inglês (opcional)`
+- `Tradução PT preferida (opcional)`
+- botão `Aprender correção`
+
+Quando você salva correções, elas ficam no banco local:
+- `learning_memory.db`
+
+Nas próximas falas, o sistema reaproveita essas correções automaticamente.
+
+## “Aprender com a internet”
+
+O projeto não faz aprendizado automático irrestrito da internet (isso é inseguro e pode degradar qualidade).
+
+Forma recomendada:
+- atualizar o app periodicamente com:
 
 ```bash
-python main_web.py
+git pull
 ```
 
-Abrir:
+- manter melhorias/correções no repositório (histórico versionado e auditável).
 
-`http://127.0.0.1:7860`
+## STT (fala -> texto)
 
-Botões disponíveis:
-- `ON`
-- `OFF`
-- `Calibrar`
-- `Aplicar Sensibilidade`
-- Painel inferior: `Logs do Programa` (erros e eventos em tempo real)
+Estratégia híbrida:
+- `faster-whisper` local (principal)
+- Google Speech Recognition (fallback)
+
+O backend ativo aparece no log ao iniciar.
+
+## Comandos úteis
 
 Listar microfones:
 
@@ -131,39 +80,19 @@ Listar microfones:
 python main_web.py --list-mics
 ```
 
-Escolher microfone:
+Selecionar microfone:
 
 ```bash
-python main_web.py --mic-index 1
+python main_web.py --mic-index 0 --host 127.0.0.1 --port 7892
 ```
 
-### Dica para ruído de fundo (TV)
-1. Deixe em `manual`.
-2. Comece com `Threshold manual` entre `800` e `1300`.
-3. Clique `Calibrar` com você em silêncio por 1-2s.
-4. Clique `ON` e teste.
-
-## Modo Produto (Desktop)
-
-Executar interface desktop guiada (sem navegador):
+Porta diferente:
 
 ```bash
-python main_desktop.py
+python main_web.py --host 127.0.0.1 --port 7893
 ```
 
-Ou com um clique:
-
-```bash
-./run_desktop.command
-```
-
-Fluxo recomendado para usuário final:
-1. `Permitir Microfone`
-2. `Auto Detectar` (microfone)
-3. `Testar Microfone` (nível)
-4. `Iniciar`
-
-## Build instalável macOS (.app)
+## Build app macOS (.app)
 
 ```bash
 ./scripts/build_macos_app.sh
@@ -172,6 +101,30 @@ Fluxo recomendado para usuário final:
 Saída:
 - `dist/RealTranslator.app`
 
-No primeiro uso, o macOS vai pedir permissão de microfone.
+## Estrutura principal
 
-<img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
+```text
+main_web.py
+main_desktop.py
+scripts/
+  install_and_run.sh
+  build_macos_app.sh
+real_time_translator/
+  app_controller.py
+  config.py
+  audio/capture.py
+  stt/provider.py
+  translation/provider.py
+  ui/web_app.py
+  learning/memory.py
+```
+
+## Troubleshooting rápido
+
+- Não reconhece fala:
+  - `CALIBRAR` em silêncio por 2s.
+  - confirme permissões de microfone do Terminal/Python no macOS.
+- Porta ocupada:
+  - troque para `--port 7893`.
+- Ambiente virtual:
+  - rode `source .venv/bin/activate`.
