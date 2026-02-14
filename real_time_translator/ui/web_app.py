@@ -60,6 +60,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       color: #f6fff9 !important;
       box-shadow: 0 0 20px var(--green-glow), 7px 7px 14px #183225 !important;
     }
+    .gradio-container button:hover {
+      transform: translateY(-1px);
+      transition: all 0.15s ease;
+    }
     #theme-shell {
       padding: 20px;
       border-radius: 24px;
@@ -76,10 +80,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     }
     .eq-bars {
       display: grid;
-      grid-template-columns: repeat(26, 1fr);
-      gap: 4px;
+      grid-template-columns: repeat(28, 1fr);
+      gap: 3px;
       align-items: end;
-      height: 100px;
+      height: 112px;
     }
     .eq-bar {
       width: 100%;
@@ -93,6 +97,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     @keyframes pulse {
       0%, 100% { transform: scaleY(0.55); filter: brightness(0.8); }
       50% { transform: scaleY(1.0); filter: brightness(1.15); }
+    }
+    @keyframes ledspin {
+      0% { box-shadow: 0 0 0 rgba(39,200,122,0.0); }
+      50% { box-shadow: 0 0 18px rgba(39,200,122,0.7); }
+      100% { box-shadow: 0 0 0 rgba(39,200,122,0.0); }
     }
     #bottom-deco {
       margin-top: 12px;
@@ -108,6 +117,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       background: radial-gradient(circle at 30% 25%, #3c4050, #252933 65%);
       box-shadow: 9px 9px 20px #171922, -7px -7px 15px #3a3e4e, inset 1px 1px 0 #4b4f62;
       position: relative;
+      transition: transform 0.2s ease;
+      animation: pulse 2.0s ease-in-out infinite;
     }
     .neo-knob::after {
       content: "";
@@ -136,60 +147,81 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     }
     """
 
-    def _power_visual() -> tuple[str, dict, dict]:
+    def _power_visual() -> tuple[str, dict, dict, dict]:
         running = controller.is_running()
         label = "ON" if running else "OFF"
         color = "#18a55a" if running else "#5e6a63"
-        glow = "0 0 6px rgba(24,165,90,0.75), 0 0 18px rgba(24,165,90,0.55)" if running else "none"
+        glow = "0 0 6px rgba(24,165,90,0.75), 0 0 22px rgba(24,165,90,0.65)" if running else "none"
         badge = (
             "<div style='display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;'>"
-            f"<span style='width:15px;height:15px;border-radius:999px;background:{color};box-shadow:{glow};display:inline-block;'></span>"
+            f"<span style='width:15px;height:15px;border-radius:999px;background:{color};box-shadow:{glow};display:inline-block;animation:ledspin 1.2s infinite;'></span>"
             f"<span>Estado do Tradutor: <strong style='color:{color}'>{label}</strong></span>"
             "</div>"
         )
         on_update = gr.update(interactive=not running, variant="primary" if not running else "secondary")
         off_update = gr.update(interactive=running, variant="primary" if running else "secondary")
-        return badge, on_update, off_update
+        calibrate_update = gr.update(variant="secondary" if running else "primary")
+        return badge, on_update, off_update, calibrate_update
 
-    def refresh() -> tuple[str, str, str, str, int, str, dict, dict]:
+    def _spectrum_visual() -> str:
+        bins = controller.spectrum_snapshot()
+        bars: list[str] = []
+        total = max(1, len(bins) - 1)
+        for idx, value in enumerate(bins):
+            t = idx / total
+            hue = 130 + int(t * 150)  # green -> blue -> purple
+            sat = 90
+            light = 58
+            bars.append(
+                f"<span class='eq-bar' style='height:{max(8, min(100, value))}px;"
+                f"background:linear-gradient(180deg, hsl({hue}, {sat}%, {light + 8}%), hsl({hue + 8}, {sat}%, {light - 12}%));'></span>"
+            )
+        return "<div id='eq-strip'><div class='eq-bars'>" + "".join(bars) + "</div></div>"
+
+    def refresh() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         status, original, translated, logs = controller.snapshot()
         _mode, threshold, _pause = controller.settings_snapshot()
-        power_badge, on_update, off_update = _power_visual()
-        return status, original, translated, logs, threshold, power_badge, on_update, off_update
+        power_badge, on_update, off_update, calibrate_update = _power_visual()
+        spectrum_html = _spectrum_visual()
+        return (
+            status,
+            original,
+            translated,
+            logs,
+            threshold,
+            power_badge,
+            spectrum_html,
+            on_update,
+            off_update,
+            calibrate_update,
+        )
 
-    def bootstrap() -> tuple[str, str, str, str, int, str, dict, dict]:
+    def bootstrap() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         if not auto_boot_done["value"]:
             controller.prepare_default()
             auto_boot_done["value"] = True
         return refresh()
 
-    def on_start() -> tuple[str, str, str, str, int, str, dict, dict]:
-        controller.start()
+    def on_start() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+        controller.start_smart()
         return refresh()
 
-    def on_stop() -> tuple[str, str, str, str, int, str, dict, dict]:
+    def on_stop() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         controller.stop()
         return refresh()
 
-    def on_calibrate() -> tuple[str, str, str, str, int, str, dict, dict]:
-        controller.recalibrate(seconds=1.2)
+    def on_calibrate() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+        controller.recalibrate(seconds=1.6)
         return refresh()
 
-    def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, dict, dict]:
+    def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.45)
         return refresh()
 
     with gr.Blocks(title="Real-Time Translator", css=ui_css) as app:
         with gr.Column(elem_id="theme-shell"):
             gr.Markdown("# Real-Time Translator", elem_id="title-main")
-            gr.HTML(
-                "<div id='eq-strip'><div class='eq-bars'>"
-                + "".join(
-                    f"<span class='eq-bar' style='height:{32 + ((i * 11) % 64)}px'></span>"
-                    for i in range(26)
-                )
-                + "</div></div>"
-            )
+            spectrum_top = gr.HTML(value="<div id='eq-strip'><div class='eq-bars'></div></div>")
 
             power_status = gr.HTML(elem_id="power-led")
             status = gr.Textbox(label="Status", interactive=False, elem_id="status-box")
@@ -222,31 +254,31 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
         app.load(
             fn=bootstrap,
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
         auto_refresh_timer = gr.Timer(1.0)
         auto_refresh_timer.tick(
             fn=refresh,
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
         on_btn.click(
             fn=on_start,
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         off_btn.click(
             fn=on_stop,
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         calibrate_btn.click(
             fn=on_calibrate,
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         apply_sens_btn.click(
             fn=on_sensitivity,
             inputs=[sensitivity],
-            outputs=[status, original, translated, logs, sensitivity, power_status, on_btn, off_btn],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
     return app

@@ -8,6 +8,7 @@ import traceback
 from datetime import datetime
 
 import speech_recognition as sr
+import numpy as np
 
 from real_time_translator.audio.capture import AudioCapture
 from real_time_translator.config import DEFAULT_CONFIG
@@ -53,6 +54,7 @@ class AppController:
         self._auto_meter_samples = 0
         self._pending_phrase = ""
         self._pending_chunks = 0
+        self._spectrum_bins: list[int] = [18] * 28
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -297,6 +299,7 @@ class AppController:
                 with self._lock:
                     self._last_level = level
                 self._auto_adjust_for_distance(level)
+            self._update_spectrum(audio)
 
             original = self._transcribe_far_field(recognizer, audio, level)
             stable_original = self._accumulate_phrase(original)
@@ -385,6 +388,42 @@ class AppController:
             return int(audioop.rms(raw, 2))
         except Exception:  # noqa: BLE001
             return 0
+
+    def _update_spectrum(self, audio: sr.AudioData) -> None:
+        try:
+            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+            if samples.size < 256:
+                return
+
+            window = np.hanning(samples.size).astype(np.float32)
+            weighted = samples * window
+            fft = np.abs(np.fft.rfft(weighted))
+            freqs = np.fft.rfftfreq(samples.size, d=1.0 / 16000.0)
+
+            low_hz = 60.0
+            high_hz = 4200.0
+            bins = len(self._spectrum_bins)
+            edges = np.geomspace(low_hz, high_hz, num=bins + 1)
+
+            values: list[float] = []
+            for i in range(bins):
+                mask = (freqs >= edges[i]) & (freqs < edges[i + 1])
+                if not np.any(mask):
+                    values.append(0.0)
+                    continue
+                band = fft[mask]
+                values.append(float(np.log1p(float(np.mean(band)))))
+
+            max_value = max(values) if values else 1.0
+            if max_value <= 0.0:
+                return
+
+            normalized = [int(8 + (v / max_value) * 92) for v in values]
+            with self._lock:
+                self._spectrum_bins = normalized
+        except Exception:  # noqa: BLE001
+            return
 
     def _transcribe_far_field(self, recognizer: sr.Recognizer, audio: sr.AudioData, level: int) -> str:
         attempts = self._prepare_audio_attempts(audio, level)
@@ -702,3 +741,7 @@ class AppController:
     def is_running(self) -> bool:
         with self._lock:
             return self._running
+
+    def spectrum_snapshot(self) -> list[int]:
+        with self._lock:
+            return list(self._spectrum_bins)
