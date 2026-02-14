@@ -85,6 +85,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             fn=refresh,
             outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
         )
+        app.load(
+            fn=refresh,
+            outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
+            every=1.0,
+        )
         start_btn.click(fn=start, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         stop_btn.click(fn=stop, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         clear_btn.click(fn=clear, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
