@@ -145,4 +145,35 @@ python main_web.py --mic-index 1
 3. Clique `Recalibrar Ambiente` com você em silêncio por 1-2s.
 4. Clique `Iniciar` e teste.
 
+## Modo Produto (Desktop)
+
+Executar interface desktop guiada (sem navegador):
+
+```bash
+python main_desktop.py
+```
+
+Ou com um clique:
+
+```bash
+./run_desktop.command
+```
+
+Fluxo recomendado para usuário final:
+1. `Permitir Microfone`
+2. `Auto Detectar` (microfone)
+3. `Testar Microfone` (nível)
+4. `Iniciar`
+
+## Build instalável macOS (.app)
+
+```bash
+./scripts/build_macos_app.sh
+```
+
+Saída:
+- `dist/RealTranslator.app`
+
+No primeiro uso, o macOS vai pedir permissão de microfone.
+
 <img width="800" height="533" alt="image" src="https://github.com/user-attachments/assets/6912bda6-3506-4fc6-bf04-83e73faa49fc" />
