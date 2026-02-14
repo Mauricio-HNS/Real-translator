@@ -32,6 +32,10 @@ class AppController:
         self._translated_lines: list[str] = []
         self._events: list[str] = []
         self._unknown_counter = 0
+        self._last_level = 0
+        self._captured_count = 0
+        self._error_count = 0
+        self._last_original = ""
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -58,7 +62,11 @@ class AppController:
                 manual_threshold=self._manual_threshold,
                 pause_threshold=self._pause_threshold,
             )
-            self._status = f"Microphone set to index: {self._mic_index if self._mic_index is not None else 'default'}"
+            mic_label = "default"
+            names = self.list_microphones()
+            if self._mic_index is not None and 0 <= self._mic_index < len(names):
+                mic_label = f"{self._mic_index} ({names[self._mic_index]})"
+            self._status = f"Microphone set: {mic_label}"
             return self._status
 
     def auto_select_microphone(self) -> str:
@@ -80,10 +88,44 @@ class AppController:
             self._status = "Could not open any microphone input."
             return self._status
 
+    def auto_scan_microphone(self, seconds: float = 0.9) -> str:
+        names = self.list_microphones()
+        if not names:
+            with self._lock:
+                self._status = "No microphone detected."
+                return self._status
+
+        best_idx = None
+        best_level = -1
+        for index in range(len(names)):
+            try:
+                probe = AudioCapture(DEFAULT_CONFIG, device_index=index)
+                probe.probe_microphone_permission()
+                level = probe.capture_level(seconds=seconds)
+                if level > best_level:
+                    best_level = level
+                    best_idx = index
+            except Exception:  # noqa: BLE001
+                continue
+
+        if best_idx is None:
+            with self._lock:
+                self._status = "Auto scan failed: no readable microphone."
+                return self._status
+
+        self.set_microphone(best_idx)
+        with self._lock:
+            self._last_level = max(0, best_level)
+            self._status = f"Auto scan selected mic {best_idx} with level {best_level}"
+            self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Auto scan selected mic={best_idx}, level={best_level}")
+            self._events = self._events[-120:]
+            return self._status
+
     def test_microphone_level(self, seconds: float = 1.0) -> str:
         try:
             level = self._capture.capture_level(seconds=seconds)
             with self._lock:
+                self._last_level = level
                 self._status = f"Mic level={level} (good speech usually > 250)"
                 self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Mic level sample: {level}")
                 self._events = self._events[-120:]
@@ -123,6 +165,7 @@ class AppController:
             audio = self._capture.listen_once(seconds=2.5)
             text = self._stt.transcribe(self._capture.recognizer, audio)
             with self._lock:
+                self._last_level = level
                 self._status = f"Diagnostic OK. Level={level}. Heard: {text[:80]}"
                 self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Diagnostic transcription: {text}")
                 self._events = self._events[-120:]
@@ -157,6 +200,8 @@ class AppController:
                 self._original_lines = self._original_lines[-300:]
                 self._translated_lines = self._translated_lines[-300:]
                 self._unknown_counter = 0
+                self._captured_count += 1
+                self._last_original = original
                 self._events.append(f"[{stamp}] Captured and translated successfully.")
                 self._events = self._events[-120:]
         except sr.UnknownValueError:
@@ -170,13 +215,32 @@ class AppController:
         except sr.RequestError as exc:
             with self._lock:
                 self._status = f"STT error: {exc}"
+                self._error_count += 1
                 self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] STT request error: {exc}")
                 self._events = self._events[-120:]
         except Exception as exc:  # noqa: BLE001
             with self._lock:
                 self._status = f"Translation error: {exc}"
+                self._error_count += 1
                 self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Translation error: {exc}")
                 self._events = self._events[-120:]
+
+    def apply_preset(self, preset: str) -> str:
+        normalized = (preset or "").strip().lower()
+        if normalized == "tv_noise":
+            return self.apply_sensitivity(mode="manual", manual_threshold=1200, pause_threshold=0.35)
+        if normalized == "quiet_room":
+            return self.apply_sensitivity(mode="auto", manual_threshold=500, pause_threshold=0.55)
+        if normalized == "street_noise":
+            return self.apply_sensitivity(mode="manual", manual_threshold=1500, pause_threshold=0.3)
+        return self.apply_sensitivity(mode="auto", manual_threshold=900, pause_threshold=0.5)
+
+    def start_smart(self) -> str:
+        self.request_microphone_access()
+        self.auto_scan_microphone(seconds=0.9)
+        self.apply_preset("tv_noise")
+        self.recalibrate(seconds=1.4)
+        return self.start()
 
     def start(self) -> str:
         with self._lock:
@@ -271,3 +335,11 @@ class AppController:
     def settings_snapshot(self) -> tuple[str, int, float]:
         with self._lock:
             return self._sensitivity_mode, self._manual_threshold, self._pause_threshold
+
+    def metrics_snapshot(self) -> str:
+        with self._lock:
+            mic = "default" if self._mic_index is None else str(self._mic_index)
+            return (
+                f"mic={mic} | level={self._last_level} | captured={self._captured_count} "
+                f"| errors={self._error_count} | mode={self._sensitivity_mode}"
+            )
