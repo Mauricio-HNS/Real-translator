@@ -8,7 +8,7 @@ def main() -> None:
     window = MainWindow(on_start=controller.start, on_stop=controller.stop)
 
     def tick() -> None:
-        status, original, translated = controller.snapshot()
+        status, original, translated, _logs = controller.snapshot()
         window.set_status(status)
         if original:
             window.original_text.delete("1.0", "end")

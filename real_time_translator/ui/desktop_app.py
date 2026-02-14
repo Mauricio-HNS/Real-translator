@@ -158,7 +158,7 @@ class DesktopTranslatorApp:
         )
 
     def _tick(self) -> None:
-        status, original, translated = self.controller.snapshot()
+        status, original, translated, _logs = self.controller.snapshot()
         self.status.set(status)
 
         self.original.delete("1.0", tk.END)

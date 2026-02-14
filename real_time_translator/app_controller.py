@@ -30,6 +30,8 @@ class AppController:
         self._pause_threshold = 0.6
         self._original_lines: list[str] = []
         self._translated_lines: list[str] = []
+        self._events: list[str] = []
+        self._unknown_counter = 0
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -83,10 +85,14 @@ class AppController:
             level = self._capture.capture_level(seconds=seconds)
             with self._lock:
                 self._status = f"Mic level={level} (good speech usually > 250)"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Mic level sample: {level}")
+                self._events = self._events[-120:]
                 return self._status
         except Exception as exc:  # noqa: BLE001
             with self._lock:
                 self._status = f"Mic test failed: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Mic test failed: {exc}")
+                self._events = self._events[-120:]
                 return self._status
 
     def request_microphone_access(self) -> str:
@@ -94,14 +100,44 @@ class AppController:
             self._capture.probe_microphone_permission()
             with self._lock:
                 self._status = "Microphone access ok"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Microphone access granted.")
+                self._events = self._events[-120:]
                 return self._status
         except sr.WaitTimeoutError:
             with self._lock:
                 self._status = "Microphone access ok (silence)"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Microphone reachable (silence).")
+                self._events = self._events[-120:]
                 return self._status
         except Exception as exc:  # noqa: BLE001
             with self._lock:
                 self._status = f"Microphone permission error: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Microphone error: {exc}")
+                self._events = self._events[-120:]
+                return self._status
+
+    def diagnose_once(self) -> str:
+        try:
+            self.request_microphone_access()
+            level = self._capture.capture_level(seconds=1.2)
+            audio = self._capture.listen_once(seconds=2.5)
+            text = self._stt.transcribe(self._capture.recognizer, audio)
+            with self._lock:
+                self._status = f"Diagnostic OK. Level={level}. Heard: {text[:80]}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Diagnostic transcription: {text}")
+                self._events = self._events[-120:]
+                return self._status
+        except sr.UnknownValueError:
+            with self._lock:
+                self._status = "Diagnostic: audio received but no speech recognized."
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Diagnostic failed: no speech recognized.")
+                self._events = self._events[-120:]
+                return self._status
+        except Exception as exc:  # noqa: BLE001
+            with self._lock:
+                self._status = f"Diagnostic failed: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Diagnostic exception: {exc}")
+                self._events = self._events[-120:]
                 return self._status
 
     def _audio_callback(self, recognizer: sr.Recognizer, audio: sr.AudioData) -> None:
@@ -120,14 +156,27 @@ class AppController:
                 self._translated_lines.append(f"[{stamp}] {translated}")
                 self._original_lines = self._original_lines[-300:]
                 self._translated_lines = self._translated_lines[-300:]
+                self._unknown_counter = 0
+                self._events.append(f"[{stamp}] Captured and translated successfully.")
+                self._events = self._events[-120:]
         except sr.UnknownValueError:
+            with self._lock:
+                self._unknown_counter += 1
+                if self._unknown_counter % 4 == 0:
+                    self._status = "Audio detected but speech not recognized yet."
+                    self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
+                    self._events = self._events[-120:]
             return
         except sr.RequestError as exc:
             with self._lock:
                 self._status = f"STT error: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] STT request error: {exc}")
+                self._events = self._events[-120:]
         except Exception as exc:  # noqa: BLE001
             with self._lock:
                 self._status = f"Translation error: {exc}"
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Translation error: {exc}")
+                self._events = self._events[-120:]
 
     def start(self) -> str:
         with self._lock:
@@ -207,14 +256,16 @@ class AppController:
         with self._lock:
             self._original_lines.clear()
             self._translated_lines.clear()
+            self._events.clear()
             return self._status
 
-    def snapshot(self) -> tuple[str, str, str]:
+    def snapshot(self) -> tuple[str, str, str, str]:
         with self._lock:
             return (
                 self._status,
                 "\n".join(self._original_lines),
                 "\n".join(self._translated_lines),
+                "\n".join(self._events[-25:]),
             )
 
     def settings_snapshot(self) -> tuple[str, int, float]:

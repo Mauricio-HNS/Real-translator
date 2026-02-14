@@ -74,6 +74,11 @@ class AudioCapture:
         raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
         return int(audioop.rms(raw, 2))
 
+    def listen_once(self, seconds: float = 2.5) -> sr.AudioData:
+        duration = max(0.8, min(6.0, float(seconds)))
+        with self._microphone as source:
+            return self._recognizer.listen(source, timeout=duration + 2.0, phrase_time_limit=duration)
+
     def stop(self) -> None:
         if self._stop_listening is not None:
             self._stop_listening(wait_for_stop=False)

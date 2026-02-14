@@ -8,33 +8,37 @@ from real_time_translator.app_controller import AppController
 def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     controller = AppController(mic_index=mic_index)
 
-    def refresh() -> tuple[str, str, str, str, int, float]:
-        status, original, translated = controller.snapshot()
+    def refresh() -> tuple[str, str, str, str, str, int, float]:
+        status, original, translated, logs = controller.snapshot()
         mode, threshold, pause = controller.settings_snapshot()
-        return status, original, translated, mode, threshold, pause
+        return status, original, translated, logs, mode, threshold, pause
 
-    def start() -> tuple[str, str, str, str, int, float]:
+    def start() -> tuple[str, str, str, str, str, int, float]:
         controller.start()
         return refresh()
 
-    def request_microphone() -> tuple[str, str, str, str, int, float]:
+    def request_microphone() -> tuple[str, str, str, str, str, int, float]:
         controller.request_microphone_access()
         return refresh()
 
-    def stop() -> tuple[str, str, str, str, int, float]:
+    def stop() -> tuple[str, str, str, str, str, int, float]:
         controller.stop()
         return refresh()
 
-    def clear() -> tuple[str, str, str, str, int, float]:
+    def clear() -> tuple[str, str, str, str, str, int, float]:
         controller.clear()
         return refresh()
 
-    def apply_sensitivity(mode: str, threshold: int, pause: float) -> tuple[str, str, str, str, int, float]:
+    def apply_sensitivity(mode: str, threshold: int, pause: float) -> tuple[str, str, str, str, str, int, float]:
         controller.apply_sensitivity(mode=mode, manual_threshold=threshold, pause_threshold=pause)
         return refresh()
 
-    def recalibrate(seconds: float) -> tuple[str, str, str, str, int, float]:
+    def recalibrate(seconds: float) -> tuple[str, str, str, str, str, int, float]:
         controller.recalibrate(seconds=seconds)
+        return refresh()
+
+    def diagnose() -> tuple[str, str, str, str, str, int, float]:
+        controller.diagnose_once()
         return refresh()
 
     with gr.Blocks(title="Real-Time Translator") as app:
@@ -85,30 +89,33 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         with gr.Row():
             original = gr.Textbox(label="Inglês (captado)", lines=14, interactive=False)
             translated = gr.Textbox(label="Português (traduzido)", lines=14, interactive=False)
+        logs = gr.Textbox(label="Logs de diagnóstico", lines=8, interactive=False)
+        diagnose_btn = gr.Button("Diagnóstico Rápido", variant="secondary")
 
         app.load(
             fn=refresh,
-            outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
+            outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold],
         )
         auto_refresh_timer = gr.Timer(1.0)
         auto_refresh_timer.tick(
             fn=refresh,
-            outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
+            outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold],
         )
-        mic_btn.click(fn=request_microphone, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
-        start_btn.click(fn=start, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
-        stop_btn.click(fn=stop, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
-        clear_btn.click(fn=clear, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
-        refresh_btn.click(fn=refresh, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
+        mic_btn.click(fn=request_microphone, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
+        start_btn.click(fn=start, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
+        stop_btn.click(fn=stop, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
+        clear_btn.click(fn=clear, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
+        refresh_btn.click(fn=refresh, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
         apply_btn.click(
             fn=apply_sensitivity,
             inputs=[sensitivity_mode, manual_threshold, pause_threshold],
-            outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
+            outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold],
         )
         recalibrate_btn.click(
             fn=recalibrate,
             inputs=[recalibrate_seconds],
-            outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
+            outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold],
         )
+        diagnose_btn.click(fn=diagnose, outputs=[status, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold])
 
     return app
