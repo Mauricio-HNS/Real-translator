@@ -51,6 +51,8 @@ class AppController:
         self._error_count = 0
         self._last_original = ""
         self._auto_meter_samples = 0
+        self._pending_phrase = ""
+        self._pending_chunks = 0
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -238,19 +240,20 @@ class AppController:
                 self._auto_adjust_for_distance(level)
 
             original = self._transcribe_far_field(recognizer, audio, level)
-            if not original:
+            stable_original = self._accumulate_phrase(original)
+            if not stable_original:
                 return
-            translated = self._safe_translate(original)
+            translated = self._safe_translate(stable_original)
             stamp = datetime.now().strftime("%H:%M:%S")
 
             with self._lock:
-                self._original_lines.append(f"[{stamp}] {original}")
+                self._original_lines.append(f"[{stamp}] {stable_original}")
                 self._translated_lines.append(f"[{stamp}] {translated}")
                 self._original_lines = self._original_lines[-300:]
                 self._translated_lines = self._translated_lines[-300:]
                 self._unknown_counter = 0
                 self._captured_count += 1
-                self._last_original = original
+                self._last_original = stable_original
                 self._events.append(f"[{stamp}] Captured and translated successfully.")
                 self._events = self._events[-120:]
         except sr.UnknownValueError:
@@ -265,6 +268,14 @@ class AppController:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
                     self._events = self._events[-120:]
+                if self._unknown_counter % 6 == 0:
+                    stamp = datetime.now().strftime("%H:%M:%S")
+                    self._original_lines.append(f"[{stamp}] xxxxx")
+                    self._translated_lines.append(f"[{stamp}] -----")
+                    self._original_lines = self._original_lines[-300:]
+                    self._translated_lines = self._translated_lines[-300:]
+                    self._pending_phrase = ""
+                    self._pending_chunks = 0
             return
         except sr.RequestError as exc:
             with self._lock:
@@ -330,6 +341,33 @@ class AppController:
         if last_unknown is not None:
             raise last_unknown
         return ""
+
+    def _accumulate_phrase(self, original: str) -> str:
+        text = (original or "").strip()
+        if not text:
+            return ""
+
+        with self._lock:
+            if self._pending_phrase:
+                combined = f"{self._pending_phrase} {text}".strip()
+            else:
+                combined = text
+
+            self._pending_phrase = combined
+            self._pending_chunks += 1
+
+            words = combined.split()
+            ends_sentence = combined.endswith((".", "?", "!"))
+            long_enough = len(words) >= 6
+            too_many_chunks = self._pending_chunks >= 3
+
+            if not (ends_sentence or long_enough or too_many_chunks):
+                return ""
+
+            finalized = self._pending_phrase
+            self._pending_phrase = ""
+            self._pending_chunks = 0
+            return finalized
 
     def _safe_translate(self, original: str) -> str:
         translated = self._translator.translate(original)
@@ -563,6 +601,8 @@ class AppController:
                 return self._status
             self._running = False
             self._starting = False
+            self._pending_phrase = ""
+            self._pending_chunks = 0
 
         self._capture.stop()
 
@@ -575,6 +615,8 @@ class AppController:
             self._original_lines.clear()
             self._translated_lines.clear()
             self._events.clear()
+            self._pending_phrase = ""
+            self._pending_chunks = 0
             return self._status
 
     def snapshot(self) -> tuple[str, str, str, str]:
