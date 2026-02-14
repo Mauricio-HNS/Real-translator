@@ -97,13 +97,16 @@ class AppController:
                 return self._status
 
         best_idx = None
+        best_score = -10_000
         best_level = -1
         for index in range(len(names)):
             try:
                 probe = AudioCapture(DEFAULT_CONFIG, device_index=index)
                 probe.probe_microphone_permission()
                 level = probe.capture_level(seconds=seconds)
-                if level > best_level:
+                score = self._mic_name_score(names[index]) + min(level, 2000)
+                if score > best_score:
+                    best_score = score
                     best_level = level
                     best_idx = index
             except Exception:  # noqa: BLE001
@@ -119,6 +122,31 @@ class AppController:
             self._last_level = max(0, best_level)
             self._status = f"Auto scan selected mic {best_idx} with level {best_level}"
             self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Auto scan selected mic={best_idx}, level={best_level}")
+            self._events = self._events[-120:]
+            return self._status
+
+    @staticmethod
+    def _mic_name_score(name: str) -> int:
+        text = (name or "").strip().lower()
+        score = 0
+        if any(k in text for k in ["macbook", "built-in", "builtin", "internal"]):
+            score += 1200
+        if "microphone" in text:
+            score += 150
+        if any(k in text for k in ["iphone", "ios", "continuity", "phone"]):
+            score -= 2000
+        if any(k in text for k in ["airpods", "bluetooth", "headset"]):
+            score -= 250
+        return score
+
+    def prepare_default(self) -> str:
+        self.request_microphone_access()
+        self.auto_scan_microphone(seconds=0.8)
+        self.apply_preset("tv_noise")
+        self.recalibrate(seconds=1.2)
+        with self._lock:
+            self._status = "Ready (auto-configured)"
+            self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Auto setup completed.")
             self._events = self._events[-120:]
             return self._status
 

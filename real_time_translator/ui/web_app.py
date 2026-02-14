@@ -8,11 +8,19 @@ from real_time_translator.app_controller import AppController
 def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     controller = AppController(mic_index=mic_index)
 
+    auto_boot_done = {"value": False}
+
     def refresh() -> tuple[str, str, str, str, str, str, int, float]:
         status, original, translated, logs = controller.snapshot()
         metrics = controller.metrics_snapshot()
         mode, threshold, pause = controller.settings_snapshot()
         return status, metrics, original, translated, logs, mode, threshold, pause
+
+    def bootstrap() -> tuple[str, str, str, str, str, str, int, float]:
+        if not auto_boot_done["value"]:
+            controller.prepare_default()
+            auto_boot_done["value"] = True
+        return refresh()
 
     def start() -> tuple[str, str, str, str, str, str, int, float]:
         controller.start()
@@ -56,7 +64,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
     with gr.Blocks(title="Real-Time Translator") as app:
         gr.Markdown("# Real-Time Translator (EN -> PT)")
-        gr.Markdown("Modo prático: clique em **Start Smart** e comece a falar.")
+        gr.Markdown("Auto setup na abertura: escolhe microfone, aplica preset e calibra automaticamente.")
 
         status = gr.Textbox(label="Status", interactive=False)
         metrics = gr.Textbox(label="Health", interactive=False)
@@ -116,7 +124,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         diagnose_btn = gr.Button("Diagnóstico Rápido", variant="secondary")
 
         app.load(
-            fn=refresh,
+            fn=bootstrap,
             outputs=[status, metrics, original, translated, logs, sensitivity_mode, manual_threshold, pause_threshold],
         )
         auto_refresh_timer = gr.Timer(1.0)
