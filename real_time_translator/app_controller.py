@@ -649,10 +649,12 @@ class AppController:
         self._capture.start(self._audio_callback)
 
     def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
+        clamped_threshold = max(60, min(3200, int(manual_threshold)))
+        clamped_pause = max(0.2, min(1.2, float(pause_threshold)))
         with self._lock:
             self._sensitivity_mode = "manual" if (mode or "").lower() == "manual" else "auto"
-            self._manual_threshold = int(manual_threshold)
-            self._pause_threshold = float(pause_threshold)
+            self._manual_threshold = clamped_threshold
+            self._pause_threshold = clamped_pause
 
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -660,13 +662,24 @@ class AppController:
             pause_threshold=self._pause_threshold,
         )
 
+        effective_threshold = int(self._capture.recognizer.energy_threshold)
         with self._lock:
+            if self._sensitivity_mode == "manual":
+                self._manual_threshold = effective_threshold
             effective = (
-                f"manual={self._manual_threshold}"
+                f"manual={effective_threshold}"
                 if self._sensitivity_mode == "manual"
                 else "auto"
             )
-            self._status = f"Sensitivity applied ({effective}, pause={self._pause_threshold:.2f})"
+            self._status = (
+                f"Sensitivity applied ({effective}, pause={self._pause_threshold:.2f}, "
+                f"threshold={effective_threshold})"
+            )
+            self._events.append(
+                f"[{datetime.now().strftime('%H:%M:%S')}] Sensitivity set: mode={self._sensitivity_mode}, "
+                f"threshold={effective_threshold}, pause={self._pause_threshold:.2f}"
+            )
+            self._events = self._events[-120:]
             return self._status
 
     def recalibrate(self, seconds: float = 1.0) -> str:
@@ -728,7 +741,10 @@ class AppController:
 
     def settings_snapshot(self) -> tuple[str, int, float]:
         with self._lock:
-            return self._sensitivity_mode, self._manual_threshold, self._pause_threshold
+            mode = self._sensitivity_mode
+            pause = self._pause_threshold
+        current_threshold = int(self._capture.recognizer.energy_threshold)
+        return mode, current_threshold, pause
 
     def metrics_snapshot(self) -> str:
         with self._lock:

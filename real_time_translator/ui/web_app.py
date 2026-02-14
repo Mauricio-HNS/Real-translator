@@ -231,11 +231,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             calibrate_btn = gr.Button("Calibrar")
 
         sensitivity = gr.Slider(
-            minimum=200,
-            maximum=2200,
-            step=50,
+            minimum=60,
+            maximum=3200,
+            step=20,
             value=900,
-            label="Sensibilidade",
+            label="Sensibilidade (baixo = mais sensível)",
         )
         apply_sens_btn = gr.Button("Aplicar Sensibilidade")
 
@@ -276,6 +276,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         apply_sens_btn.click(
+            fn=on_sensitivity,
+            inputs=[sensitivity],
+            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+        )
+        sensitivity.change(
             fn=on_sensitivity,
             inputs=[sensitivity],
             outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
