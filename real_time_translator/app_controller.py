@@ -247,9 +247,9 @@ class AppController:
                 self._unknown_counter += 1
                 if self._sensitivity_mode == "auto":
                     current = int(self._capture.recognizer.energy_threshold)
-                    boosted = max(140, min(current, 250))
-                    if boosted != current:
-                        self._capture.recognizer.energy_threshold = boosted
+                    lowered = max(85, current - 18)
+                    if lowered != current:
+                        self._capture.recognizer.energy_threshold = lowered
                 if self._unknown_counter % 4 == 0:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
@@ -288,8 +288,8 @@ class AppController:
     def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
         meters = max(0.6, min(1.5, float(target_meters)))
         # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
-        base_threshold = int(170 + (meters - 1.0) * 120)
-        pause = 0.42 if meters <= 1.0 else 0.48
+        base_threshold = int(120 + (meters - 1.0) * 110)
+        pause = 0.38 if meters <= 1.0 else 0.44
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
             self._events.append(
@@ -318,13 +318,13 @@ class AppController:
             raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
             gain = 1.0
             if level < 90:
-                gain = 2.8
+                gain = 3.6
             elif level < 140:
-                gain = 2.2
+                gain = 2.8
             elif level < 220:
-                gain = 1.7
+                gain = 2.0
             elif level < 320:
-                gain = 1.3
+                gain = 1.5
             if gain <= 1.0:
                 return sr.AudioData(raw, 16000, 2)
             boosted = audioop.mul(raw, 2, gain)
@@ -340,9 +340,9 @@ class AppController:
         current = int(recognizer.energy_threshold)
         updated = current
         if level < 100:
-            updated = max(140, current - 18)
+            updated = max(85, current - 24)
         elif level < 170:
-            updated = max(140, current - 8)
+            updated = max(85, current - 12)
         elif level > 1400:
             updated = min(1400, current + 30)
         elif level > 950:
@@ -517,3 +517,7 @@ class AppController:
                 f"mic={mic} | level={self._last_level} | captured={self._captured_count} "
                 f"| errors={self._error_count} | mode={self._sensitivity_mode}"
             )
+
+    def is_running(self) -> bool:
+        with self._lock:
+            return self._running
