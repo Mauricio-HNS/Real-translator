@@ -8,14 +8,61 @@ from real_time_translator.app_controller import AppController
 def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     controller = AppController(mic_index=mic_index)
     auto_boot_done = {"value": False}
+    ui_css = """
+    :root {
+      --bg: #f4f9f4;
+      --card: #eef6ee;
+      --text: #13321f;
+      --green: #1d9b52;
+      --green-soft: #8ef0b8;
+      --shadow-dark: #c8d7c8;
+      --shadow-light: #ffffff;
+    }
+    .gradio-container {
+      background: linear-gradient(155deg, var(--bg), #f8fcf8);
+      color: var(--text);
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+    }
+    .gradio-container h1, .gradio-container h2, .gradio-container h3, .gradio-container label {
+      color: var(--text) !important;
+      letter-spacing: 0.2px;
+    }
+    .gradio-container .block {
+      background: var(--card);
+      border: none !important;
+      border-radius: 18px !important;
+      box-shadow: 9px 9px 18px var(--shadow-dark), -9px -9px 18px var(--shadow-light) !important;
+    }
+    .gradio-container textarea, .gradio-container input {
+      background: #f3faf3 !important;
+      border: none !important;
+      border-radius: 14px !important;
+      box-shadow: inset 5px 5px 10px #d2dfd2, inset -5px -5px 10px #ffffff !important;
+      color: #10301d !important;
+    }
+    .gradio-container button {
+      border: none !important;
+      border-radius: 14px !important;
+      font-weight: 700 !important;
+      box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light) !important;
+    }
+    .gradio-container button.primary {
+      background: linear-gradient(160deg, #23b95f, #15803d) !important;
+      color: #f6fff9 !important;
+      box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 16px rgba(22, 163, 74, 0.45) !important;
+    }
+    """
 
     def _power_visual() -> tuple[str, dict, dict]:
         running = controller.is_running()
         label = "ON" if running else "OFF"
-        color = "#15803d" if running else "#b91c1c"
+        color = "#18a55a" if running else "#5e6a63"
+        glow = "0 0 6px rgba(24,165,90,0.75), 0 0 18px rgba(24,165,90,0.55)" if running else "none"
         badge = (
-            "<div style='font-weight:700;font-size:18px;'>Estado do Tradutor: "
-            f"<span style='color:{color}'>{label}</span></div>"
+            "<div style='display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;'>"
+            f"<span style='width:15px;height:15px;border-radius:999px;background:{color};box-shadow:{glow};display:inline-block;'></span>"
+            f"<span>Estado do Tradutor: <strong style='color:{color}'>{label}</strong></span>"
+            "</div>"
         )
         on_update = gr.update(interactive=not running, variant="primary" if not running else "secondary")
         off_update = gr.update(interactive=running, variant="primary" if running else "secondary")
@@ -49,7 +96,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.45)
         return refresh()
 
-    with gr.Blocks(title="Real-Time Translator") as app:
+    with gr.Blocks(title="Real-Time Translator", css=ui_css) as app:
         gr.Markdown("# Real-Time Translator")
         power_status = gr.HTML()
 
