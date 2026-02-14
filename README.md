@@ -119,16 +119,10 @@ Abrir:
 `http://127.0.0.1:7860`
 
 Botões disponíveis:
-- `Permitir Microfone` (dispara pedido de permissão no macOS)
-- `Start Smart` (permite, auto-scan, aplica preset e inicia)
-- `Auto Scan Mic` (escolhe melhor microfone por nível)
-- `Iniciar`
-- `Parar`
-- `Limpar`
-- `Atualizar`
-- `Diagnóstico Rápido` (testa captação + STT e mostra erro real)
-- `Aplicar Sensibilidade` (auto/manual)
-- `Recalibrar Ambiente` (isolar melhor ruído de TV/fundo)
+- `ON`
+- `OFF`
+- `Calibrar`
+- `Aplicar Sensibilidade`
 
 Presets de ambiente:
 - `tv_noise` (recomendado para TV/fundo)
