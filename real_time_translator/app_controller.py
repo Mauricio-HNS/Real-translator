@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import audioop
+from array import array
 import threading
 import traceback
 from datetime import datetime
@@ -288,8 +289,8 @@ class AppController:
     def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
         meters = max(0.6, min(1.5, float(target_meters)))
         # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
-        base_threshold = int(95 + (meters - 1.0) * 100)
-        pause = 0.34 if meters <= 1.0 else 0.4
+        base_threshold = int(70 + (meters - 1.0) * 90)
+        pause = 0.32 if meters <= 1.0 else 0.38
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
             self._events.append(
@@ -321,34 +322,64 @@ class AppController:
         return ""
 
     def _prepare_audio_attempts(self, audio: sr.AudioData, level: int) -> list[sr.AudioData]:
-        attempts: list[sr.AudioData] = [audio]
+        attempts: list[sr.AudioData] = []
         for gain in self._gain_candidates(level):
-            boosted = self._boost_audio(audio, gain)
+            boosted = self._boost_audio(audio, gain, denoise=True)
             if boosted is not None:
                 attempts.append(boosted)
+        # Keep raw as final fallback.
+        attempts.append(audio)
         return attempts
 
     @staticmethod
     def _gain_candidates(level: int) -> list[float]:
         if level < 80:
-            return [4.6, 3.4, 2.4]
+            return [5.2, 4.1, 3.0]
         if level < 130:
-            return [3.6, 2.8, 2.0]
+            return [4.1, 3.1, 2.3]
         if level < 220:
-            return [2.6, 1.9, 1.4]
+            return [3.0, 2.2, 1.7]
         if level < 340:
-            return [1.8, 1.4]
-        return [1.2]
+            return [2.0, 1.6]
+        return [1.3]
 
-    def _boost_audio(self, audio: sr.AudioData, gain: float) -> sr.AudioData | None:
+    def _boost_audio(self, audio: sr.AudioData, gain: float, denoise: bool = False) -> sr.AudioData | None:
         try:
             raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
             if gain <= 1.0:
                 return None
             boosted = audioop.mul(raw, 2, gain)
+            if denoise:
+                boosted = self._speech_denoise_and_normalize(boosted)
             return sr.AudioData(boosted, 16000, 2)
         except Exception:  # noqa: BLE001
             return None
+
+    @staticmethod
+    def _speech_denoise_and_normalize(raw: bytes) -> bytes:
+        # Light noise gate + peak normalization focused on speech band dynamics.
+        samples = array("h")
+        samples.frombytes(raw)
+        if not samples:
+            return raw
+
+        avg_abs = max(1, int(sum(abs(s) for s in samples) / len(samples)))
+        gate = max(180, min(900, int(avg_abs * 0.75)))
+
+        max_abs = 1
+        for i, sample in enumerate(samples):
+            if -gate < sample < gate:
+                samples[i] = 0
+                continue
+            if abs(sample) > max_abs:
+                max_abs = abs(sample)
+
+        target_peak = 11000
+        norm_gain = min(2.8, max(1.0, target_peak / max_abs))
+        if norm_gain > 1.0:
+            normalized = audioop.mul(samples.tobytes(), 2, norm_gain)
+            return normalized
+        return samples.tobytes()
 
     def _auto_adjust_for_distance(self, level: int) -> None:
         with self._lock:
@@ -358,9 +389,9 @@ class AppController:
         current = int(recognizer.energy_threshold)
         updated = current
         if level < 100:
-            updated = max(65, current - 30)
+            updated = max(55, current - 34)
         elif level < 170:
-            updated = max(65, current - 16)
+            updated = max(55, current - 20)
         elif level > 1400:
             updated = min(1400, current + 30)
         elif level > 950:
