@@ -138,6 +138,24 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       text-align: center;
       letter-spacing: 0.6px;
     }
+    .slider-ruler {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin: 4px 8px 0 8px;
+      color: #9fb0cb;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+    }
+    .slider-ruler span::before {
+      content: "";
+      display: block;
+      width: 1px;
+      height: 8px;
+      margin: 0 auto 3px auto;
+      background: #7d89a0;
+      opacity: 0.8;
+    }
     #status-box textarea { min-height: 62px !important; }
     #logs-box textarea { min-height: 130px !important; }
     #power-led { margin: 6px 0 4px; }
@@ -178,7 +196,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             )
         return "<div id='eq-strip'><div class='eq-bars'>" + "".join(bars) + "</div></div>"
 
-    def refresh() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def refresh() -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
         status, original, translated, logs = controller.snapshot()
         _mode, threshold, _pause = controller.settings_snapshot()
         power_badge, on_update, off_update, calibrate_update = _power_visual()
@@ -189,6 +207,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             translated,
             logs,
             threshold,
+            f"Régua atual: {threshold}",
             power_badge,
             spectrum_html,
             on_update,
@@ -212,7 +231,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             calibrate_update,
         )
 
-    def bootstrap() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def bootstrap() -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
         if not auto_boot_done["value"]:
             controller.prepare_default()
             auto_boot_done["value"] = True
@@ -230,7 +249,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         controller.recalibrate(seconds=1.6)
         return refresh_live()
 
-    def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
         controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.60)
         return refresh()
 
@@ -253,6 +272,13 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             value=900,
             label="Sensibilidade (baixo = mais sensível)",
         )
+        gr.HTML(
+            "<div class='slider-ruler'>"
+            "<span>60</span><span>400</span><span>800</span><span>1200</span>"
+            "<span>1800</span><span>2400</span><span>3200</span>"
+            "</div>"
+        )
+        sensitivity_value = gr.Textbox(label="Régua de Sensibilidade", interactive=False, value="Régua atual: 900")
         apply_sens_btn = gr.Button("Aplicar Sensibilidade")
 
         with gr.Row():
@@ -270,7 +296,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
         app.load(
             fn=bootstrap,
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, sensitivity, sensitivity_value, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
         auto_refresh_timer = gr.Timer(1.0)
@@ -294,7 +320,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         apply_sens_btn.click(
             fn=on_sensitivity,
             inputs=[sensitivity],
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, sensitivity, sensitivity_value, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
     return app
