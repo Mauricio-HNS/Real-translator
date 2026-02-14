@@ -280,10 +280,5 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             inputs=[sensitivity],
             outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
-        sensitivity.change(
-            fn=on_sensitivity,
-            inputs=[sensitivity],
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
-        )
 
     return app

@@ -6,7 +6,7 @@ class AppConfig:
     source_speech_language: str = "en-US"
     source_translation_language: str = "en"
     target_translation_language: str = "pt"
-    phrase_time_limit_seconds: float = 2.8
+    phrase_time_limit_seconds: float = 1.2
     ambient_adjust_seconds: float = 1.0
     energy_threshold: int = 300
 

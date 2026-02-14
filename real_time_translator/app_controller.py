@@ -55,6 +55,7 @@ class AppController:
         self._pending_phrase = ""
         self._pending_chunks = 0
         self._spectrum_bins: list[int] = [18] * 28
+        self._last_sensitivity_signature: tuple[str, int, float] = ("", -1, -1.0)
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -490,8 +491,9 @@ class AppController:
 
     def _prepare_audio_attempts(self, audio: sr.AudioData, level: int) -> list[sr.AudioData]:
         attempts: list[sr.AudioData] = []
-        for gain in self._gain_candidates(level):
-            boosted = self._boost_audio(audio, gain, denoise=True)
+        gains = self._gain_candidates(level)
+        if gains:
+            boosted = self._boost_audio(audio, gains[0], denoise=False)
             if boosted is not None:
                 attempts.append(boosted)
         # Keep raw as final fallback.
@@ -635,17 +637,7 @@ class AppController:
                 return self._status
 
     def _start_listening_sequence(self) -> None:
-        try:
-            if self._sensitivity_mode == "auto":
-                self._capture.smart_calibrate(passes=1, seconds=0.35)
-            else:
-                self._capture.calibrate()
-        except Exception as exc:  # noqa: BLE001
-            with self._lock:
-                self._events.append(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] Startup calibrate skipped: {type(exc).__name__}: {exc!r}"
-                )
-                self._events = self._events[-120:]
+        # Low-latency start: avoid blocking calibration on start; use explicit "Calibrar" button when needed.
         self._capture.start(self._audio_callback)
 
     def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
@@ -675,11 +667,14 @@ class AppController:
                 f"Sensitivity applied ({effective}, pause={self._pause_threshold:.2f}, "
                 f"threshold={effective_threshold})"
             )
-            self._events.append(
-                f"[{datetime.now().strftime('%H:%M:%S')}] Sensitivity set: mode={self._sensitivity_mode}, "
-                f"threshold={effective_threshold}, pause={self._pause_threshold:.2f}"
-            )
-            self._events = self._events[-120:]
+            signature = (self._sensitivity_mode, effective_threshold, round(self._pause_threshold, 2))
+            if signature != self._last_sensitivity_signature:
+                self._last_sensitivity_signature = signature
+                self._events.append(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Sensitivity set: mode={self._sensitivity_mode}, "
+                    f"threshold={effective_threshold}, pause={self._pause_threshold:.2f}"
+                )
+                self._events = self._events[-120:]
             return self._status
 
     def recalibrate(self, seconds: float = 1.0) -> str:
