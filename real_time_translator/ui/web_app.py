@@ -109,23 +109,17 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     }
     .eq-bars {
       display: grid;
-      grid-template-columns: repeat(28, 1fr);
-      gap: 3px;
+      grid-template-columns: repeat(14, 1fr);
+      gap: 5px;
       align-items: end;
-      height: 84px;
+      height: 58px;
     }
     .eq-bar {
       width: 100%;
       border-radius: 4px 4px 2px 2px;
       background: linear-gradient(180deg, var(--orange), #ff5e86, var(--magenta), #6fa8ff);
-      animation: pulse 1.9s ease-in-out infinite;
-      opacity: 0.92;
-    }
-    .eq-bar:nth-child(odd) { animation-duration: 1.4s; }
-    .eq-bar:nth-child(3n) { animation-duration: 2.2s; }
-    @keyframes pulse {
-      0%, 100% { transform: scaleY(0.55); filter: brightness(0.8); }
-      50% { transform: scaleY(1.0); filter: brightness(1.15); }
+      opacity: 0.82;
+      transition: height 0.22s ease-out, filter 0.22s ease-out;
     }
     @keyframes knob-spin {
       0% { transform: rotate(0deg); }
@@ -243,7 +237,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         return badge, on_update, off_update, calibrate_update
 
     def _spectrum_visual() -> str:
-        bins = controller.spectrum_snapshot()
+        raw_bins = controller.spectrum_snapshot()
+        bins: list[int] = []
+        for i in range(0, len(raw_bins), 2):
+            segment = raw_bins[i : i + 2]
+            bins.append(int(sum(segment) / max(1, len(segment))))
         bars: list[str] = []
         total = max(1, len(bins) - 1)
         for idx, value in enumerate(bins):
@@ -252,7 +250,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             sat = 90
             light = 58
             bars.append(
-                f"<span class='eq-bar' style='height:{max(8, min(100, value))}px;"
+                f"<span class='eq-bar' style='height:{max(6, min(66, value))}px;"
                 f"background:linear-gradient(180deg, hsl({hue}, {sat}%, {light + 8}%), hsl({hue + 8}, {sat}%, {light - 12}%));'></span>"
             )
         return "<div id='eq-strip'><div class='eq-bars'>" + "".join(bars) + "</div></div>"
@@ -361,7 +359,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             outputs=[status, original, translated, logs, sensitivity, sensitivity_value, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
-        auto_refresh_timer = gr.Timer(1.0)
+        auto_refresh_timer = gr.Timer(1.35)
         auto_refresh_timer.tick(
             fn=refresh_live,
             outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
