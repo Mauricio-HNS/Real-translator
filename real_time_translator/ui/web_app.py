@@ -30,6 +30,9 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       font-family: "Avenir Next", "Segoe UI", sans-serif;
       max-width: 100vw !important;
       padding: 8px !important;
+      height: 100dvh;
+      overflow: hidden;
+      box-sizing: border-box;
     }
     .gradio-container h1, .gradio-container h2, .gradio-container h3, .gradio-container label {
       color: var(--text) !important;
@@ -73,6 +76,22 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       border: 1px solid #383b4a;
       max-width: 1120px;
       margin: 0 auto;
+      height: calc(100dvh - 24px);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    #main-readouts {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      gap: 10px;
+    }
+    #main-readouts > * {
+      flex: 1 1 0;
+      min-width: 0;
     }
     #eq-strip {
       margin: 2px 0 10px 0;
@@ -165,8 +184,12 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       background: #7d89a0;
       opacity: 0.8;
     }
-    #status-box textarea { min-height: 52px !important; }
-    #logs-box textarea { min-height: 90px !important; }
+    #status-box textarea { min-height: 46px !important; max-height: 56px !important; }
+    #logs-box textarea { min-height: 74px !important; max-height: 82px !important; }
+    #orig-box textarea, #trans-box textarea {
+      height: clamp(210px, 36dvh, 410px) !important;
+      min-height: 180px !important;
+    }
     #power-led { margin: 6px 0 4px; }
     #title-main h1 {
       text-shadow: 0 0 18px rgba(150, 170, 255, 0.25);
@@ -178,11 +201,20 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       #bottom-deco { display: none; }
       .eq-bars { height: 68px; }
       #theme-shell { padding: 10px; }
+      #orig-box textarea, #trans-box textarea {
+        height: clamp(150px, 30dvh, 250px) !important;
+      }
     }
     @media (max-width: 1000px) {
       .gradio-container { padding: 4px !important; }
       #theme-shell { border-radius: 14px; }
       #title-main h1 { font-size: 22px !important; }
+      #main-readouts {
+        flex-direction: column;
+      }
+      #orig-box textarea, #trans-box textarea {
+        height: clamp(120px, 20dvh, 200px) !important;
+      }
     }
     """
 
@@ -302,10 +334,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         sensitivity_value = gr.Textbox(label="Régua de Sensibilidade", interactive=False, value="Régua atual: 900")
         apply_sens_btn = gr.Button("Aplicar Sensibilidade")
 
-        with gr.Row():
-            original = gr.Textbox(label="Inglês", lines=10, interactive=False)
-            translated = gr.Textbox(label="Português", lines=10, interactive=False)
-        logs = gr.Textbox(label="Logs do Programa", lines=5, interactive=False, elem_id="logs-box")
+        with gr.Row(elem_id="main-readouts"):
+            original = gr.Textbox(label="Inglês", lines=8, interactive=False, elem_id="orig-box")
+            translated = gr.Textbox(label="Português", lines=8, interactive=False, elem_id="trans-box")
+        logs = gr.Textbox(label="Logs do Programa", lines=4, interactive=False, elem_id="logs-box")
 
         gr.HTML(
             "<div id='bottom-deco'>"
