@@ -70,6 +70,10 @@ class AudioCapture:
             self._recognizer.energy_threshold = max(100, min(4000, int(manual_threshold)))
         else:
             self._recognizer.dynamic_energy_threshold = True
+            # Auto mode tuned for distant speech (~1m): keep a lower floor and react faster.
+            self._recognizer.energy_threshold = max(140, min(1200, int(manual_threshold)))
+            self._recognizer.dynamic_energy_adjustment_damping = 0.12
+            self._recognizer.dynamic_energy_ratio = 1.35
 
     def start(self, callback: Callable[[sr.Recognizer, sr.AudioData], None]) -> None:
         self.stop()

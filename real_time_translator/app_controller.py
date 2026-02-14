@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import audioop
 import threading
 from datetime import datetime
 
@@ -37,6 +38,7 @@ class AppController:
         self._captured_count = 0
         self._error_count = 0
         self._last_original = ""
+        self._auto_meter_samples = 0
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
@@ -142,7 +144,7 @@ class AppController:
     def prepare_default(self) -> str:
         self.request_microphone_access()
         self.auto_scan_microphone(seconds=0.8)
-        self.apply_preset("tv_noise")
+        self.apply_auto_distance_profile(target_meters=1.0)
         self.recalibrate(seconds=1.2)
         with self._lock:
             self._status = "Ready (auto-configured)"
@@ -217,6 +219,12 @@ class AppController:
             return
 
         try:
+            level = self._audio_level(audio)
+            if level > 0:
+                with self._lock:
+                    self._last_level = level
+                self._auto_adjust_for_distance(level)
+
             original = self._stt.transcribe(recognizer, audio)
             if not original:
                 return
@@ -236,6 +244,11 @@ class AppController:
         except sr.UnknownValueError:
             with self._lock:
                 self._unknown_counter += 1
+                if self._sensitivity_mode == "auto":
+                    current = int(self._capture.recognizer.energy_threshold)
+                    boosted = max(140, min(current, 250))
+                    if boosted != current:
+                        self._capture.recognizer.energy_threshold = boosted
                 if self._unknown_counter % 4 == 0:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
@@ -267,9 +280,54 @@ class AppController:
     def start_smart(self) -> str:
         self.request_microphone_access()
         self.auto_scan_microphone(seconds=0.9)
-        self.apply_preset("tv_noise")
+        self.apply_auto_distance_profile(target_meters=1.0)
         self.recalibrate(seconds=1.4)
         return self.start()
+
+    def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
+        meters = max(0.6, min(1.5, float(target_meters)))
+        # For ~1m speech we need higher sensitivity (lower threshold) with fast auto adaptation.
+        base_threshold = int(220 + (meters - 1.0) * 140)
+        pause = 0.45 if meters <= 1.0 else 0.5
+        status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
+        with self._lock:
+            self._events.append(
+                f"[{datetime.now().strftime('%H:%M:%S')}] Auto distance profile enabled (~{meters:.1f}m)."
+            )
+            self._events = self._events[-120:]
+        return status
+
+    def _audio_level(self, audio: sr.AudioData) -> int:
+        try:
+            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+            return int(audioop.rms(raw, 2))
+        except Exception:  # noqa: BLE001
+            return 0
+
+    def _auto_adjust_for_distance(self, level: int) -> None:
+        with self._lock:
+            if self._sensitivity_mode != "auto":
+                return
+        recognizer = self._capture.recognizer
+        current = int(recognizer.energy_threshold)
+        updated = current
+        if level < 100:
+            updated = max(140, current - 18)
+        elif level < 170:
+            updated = max(140, current - 8)
+        elif level > 1400:
+            updated = min(1400, current + 30)
+        elif level > 950:
+            updated = min(1400, current + 14)
+        if updated != current:
+            recognizer.energy_threshold = updated
+        with self._lock:
+            self._auto_meter_samples += 1
+            if self._auto_meter_samples % 12 == 0:
+                self._events.append(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Auto sensitivity: level={level}, threshold={int(recognizer.energy_threshold)}"
+                )
+                self._events = self._events[-120:]
 
     def start(self) -> str:
         with self._lock:
