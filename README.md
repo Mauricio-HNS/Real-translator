@@ -124,6 +124,7 @@ Botões disponíveis:
 - `Parar`
 - `Limpar`
 - `Atualizar`
+- `Diagnóstico Rápido` (testa captação + STT e mostra erro real)
 - `Aplicar Sensibilidade` (auto/manual)
 - `Recalibrar Ambiente` (isolar melhor ruído de TV/fundo)
 
