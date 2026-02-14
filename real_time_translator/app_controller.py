@@ -40,6 +40,21 @@ class AppController:
     def list_microphones() -> list[str]:
         return AudioCapture.list_microphones()
 
+    def request_microphone_access(self) -> str:
+        try:
+            self._capture.probe_microphone_permission()
+            with self._lock:
+                self._status = "Microphone access ok"
+                return self._status
+        except sr.WaitTimeoutError:
+            with self._lock:
+                self._status = "Microphone access ok (silence)"
+                return self._status
+        except Exception as exc:  # noqa: BLE001
+            with self._lock:
+                self._status = f"Microphone permission error: {exc}"
+                return self._status
+
     def _audio_callback(self, recognizer: sr.Recognizer, audio: sr.AudioData) -> None:
         if not self._running:
             return
@@ -71,7 +86,10 @@ class AppController:
                 return self._status
             self._status = "Calibrating microphone..."
 
-        self._capture.calibrate()
+        if self._sensitivity_mode == "auto":
+            self._capture.smart_calibrate(passes=3, seconds=0.5)
+        else:
+            self._capture.calibrate()
         self._capture.start(self._audio_callback)
 
         with self._lock:

@@ -29,6 +29,17 @@ class AudioCapture:
                 duration=self._config.ambient_adjust_seconds,
             )
 
+    def smart_calibrate(self, passes: int = 3, seconds: float = 0.5) -> None:
+        total_passes = max(1, min(6, int(passes)))
+        duration = max(0.3, min(2.0, float(seconds)))
+        for _ in range(total_passes):
+            self.recalibrate(seconds=duration)
+
+    def probe_microphone_permission(self) -> None:
+        # Opening the microphone stream triggers macOS permission prompt if needed.
+        with self._microphone as source:
+            self._recognizer.listen(source, timeout=1, phrase_time_limit=0.2)
+
     def recalibrate(self, seconds: float = 1.0) -> None:
         with self._microphone as source:
             self._recognizer.adjust_for_ambient_noise(source, duration=max(0.3, seconds))

@@ -17,6 +17,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         controller.start()
         return refresh()
 
+    def request_microphone() -> tuple[str, str, str, str, int, float]:
+        controller.request_microphone_access()
+        return refresh()
+
     def stop() -> tuple[str, str, str, str, int, float]:
         controller.stop()
         return refresh()
@@ -39,6 +43,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
         status = gr.Textbox(label="Status", interactive=False)
         with gr.Row():
+            mic_btn = gr.Button("Permitir Microfone")
             start_btn = gr.Button("Iniciar", variant="primary")
             stop_btn = gr.Button("Parar")
             clear_btn = gr.Button("Limpar")
@@ -90,6 +95,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
             every=1.0,
         )
+        mic_btn.click(fn=request_microphone, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         start_btn.click(fn=start, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         stop_btn.click(fn=stop, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         clear_btn.click(fn=clear, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
