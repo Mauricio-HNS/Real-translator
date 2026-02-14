@@ -320,39 +320,39 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
             power_status = gr.HTML(elem_id="power-led")
             status = gr.Textbox(label="Status", interactive=False, elem_id="status-box")
-        with gr.Row():
-            on_btn = gr.Button("LIGAR", variant="primary")
-            off_btn = gr.Button("DESLIGAR")
-            calibrate_btn = gr.Button("Calibrar")
+            with gr.Row():
+                on_btn = gr.Button("LIGAR", variant="primary")
+                off_btn = gr.Button("DESLIGAR")
+                calibrate_btn = gr.Button("Calibrar")
 
-        sensitivity = gr.Slider(
-            minimum=60,
-            maximum=3200,
-            step=5,
-            value=900,
-            label="Sensibilidade (baixo = mais sensível)",
-        )
-        gr.HTML(
-            "<div class='slider-ruler'>"
-            "<span>60</span><span>400</span><span>800</span><span>1200</span>"
-            "<span>1800</span><span>2400</span><span>3200</span>"
-            "</div>"
-        )
-        sensitivity_value = gr.Textbox(label="Régua de Sensibilidade", interactive=False, value="Régua atual: 900")
-        apply_sens_btn = gr.Button("Aplicar Sensibilidade")
+            sensitivity = gr.Slider(
+                minimum=60,
+                maximum=3200,
+                step=5,
+                value=900,
+                label="Sensibilidade (baixo = mais sensível)",
+            )
+            gr.HTML(
+                "<div class='slider-ruler'>"
+                "<span>60</span><span>400</span><span>800</span><span>1200</span>"
+                "<span>1800</span><span>2400</span><span>3200</span>"
+                "</div>"
+            )
+            sensitivity_value = gr.Textbox(label="Régua de Sensibilidade", interactive=False, value="Régua atual: 900")
+            apply_sens_btn = gr.Button("Aplicar Sensibilidade")
 
-        with gr.Row(elem_id="main-readouts"):
-            original = gr.Textbox(label="Inglês", lines=8, interactive=False, elem_id="orig-box")
-            translated = gr.Textbox(label="Português", lines=8, interactive=False, elem_id="trans-box")
-        logs = gr.Textbox(label="Logs do Programa", lines=4, interactive=False, elem_id="logs-box")
+            with gr.Row(elem_id="main-readouts"):
+                original = gr.Textbox(label="Inglês", lines=8, interactive=False, elem_id="orig-box")
+                translated = gr.Textbox(label="Português", lines=8, interactive=False, elem_id="trans-box")
+            logs = gr.Textbox(label="Logs do Programa", lines=4, interactive=False, elem_id="logs-box")
 
-        gr.HTML(
-            "<div id='bottom-deco'>"
-            "<div><div class='neo-knob'></div><div class='neo-label'>INPUT</div></div>"
-            "<div><div class='neo-knob knob-two'></div><div class='neo-label'>FILTER</div></div>"
-            "<div><div class='neo-knob knob-three'></div><div class='neo-label'>OUTPUT</div></div>"
-            "</div>"
-        )
+            gr.HTML(
+                "<div id='bottom-deco'>"
+                "<div><div class='neo-knob'></div><div class='neo-label'>INPUT</div></div>"
+                "<div><div class='neo-knob knob-two'></div><div class='neo-label'>FILTER</div></div>"
+                "<div><div class='neo-knob knob-three'></div><div class='neo-label'>OUTPUT</div></div>"
+                "</div>"
+            )
 
         app.load(
             fn=bootstrap,
