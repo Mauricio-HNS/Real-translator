@@ -90,10 +90,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             fn=refresh,
             outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
         )
-        app.load(
+        auto_refresh_timer = gr.Timer(1.0)
+        auto_refresh_timer.tick(
             fn=refresh,
             outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold],
-            every=1.0,
         )
         mic_btn.click(fn=request_microphone, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
         start_btn.click(fn=start, outputs=[status, original, translated, sensitivity_mode, manual_threshold, pause_threshold])
