@@ -39,7 +39,7 @@ class AudioCapture:
     def probe_microphone_permission(self) -> None:
         # Opening the microphone stream triggers macOS permission prompt if needed.
         with self._microphone as source:
-            self._recognizer.listen(source, timeout=1, phrase_time_limit=0.2)
+            self._recognizer.record(source, duration=0.2)
 
     def recalibrate(self, seconds: float = 1.0) -> None:
         with self._microphone as source:
@@ -70,14 +70,14 @@ class AudioCapture:
     def capture_level(self, seconds: float = 0.8) -> int:
         duration = max(0.2, min(3.0, float(seconds)))
         with self._microphone as source:
-            audio = self._recognizer.listen(source, timeout=duration + 1.0, phrase_time_limit=duration)
+            audio = self._recognizer.record(source, duration=duration)
         raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
         return int(audioop.rms(raw, 2))
 
     def listen_once(self, seconds: float = 2.5) -> sr.AudioData:
         duration = max(0.8, min(6.0, float(seconds)))
         with self._microphone as source:
-            return self._recognizer.listen(source, timeout=duration + 2.0, phrase_time_limit=duration)
+            return self._recognizer.record(source, duration=duration)
 
     def stop(self) -> None:
         if self._stop_listening is not None:
