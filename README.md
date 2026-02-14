@@ -1,25 +1,21 @@
-# Tradutor em Tempo Real (EN -> PT)
+# Real Translator
 
-Aplicação para transcrever inglês e traduzir para português em tempo real, com interface Web e memória de correções.
+Tradutor de voz em tempo real (EN -> PT) com duas frentes:
+- App Web (uso final)
+- API SaaS (integração para empresas, cobrança mensal)
 
-## Instalação em 1 comando (GitHub)
+## 1) Rodar o App Web
 
-No macOS/Linux, rode:
+### Instalação rápida (macOS/Linux)
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mauricio-HNS/Real-translator/main/scripts/install_and_run.sh)"
 ```
 
-O comando:
-- clona/atualiza o projeto,
-- cria `.venv`,
-- instala dependências,
-- inicia o servidor Web.
-
-Depois, abra no navegador:
+Abre em:
 - `http://127.0.0.1:7892`
 
-## Instalação manual
+### Instalação manual
 
 ```bash
 cd "/Users/mauriciohenrique/Documents/New project/Real-translator"
@@ -29,70 +25,81 @@ pip install -r requirements.txt
 python main_web.py --host 127.0.0.1 --port 7892
 ```
 
-## Como usar
+## 2) API SaaS (mensal)
 
-1. Clique `LIGAR`.
-2. Clique `CALIBRAR` e fique em silêncio por ~2s.
-3. Fale em inglês.
-4. Veja a frase completa em `Inglês` e a tradução em `Português`.
+Backend para empresas enviarem texto e receberem tradução com controle de uso mensal.
 
-Parar:
-- `Ctrl + C` no terminal.
-
-## Como o programa aprende com usuários
-
-A interface tem:
-- `Aprender Inglês (opcional)`
-- `Tradução PT preferida (opcional)`
-- botão `Aprender correção`
-
-Quando você salva correções, elas ficam no banco local:
-- `learning_memory.db`
-
-Nas próximas falas, o sistema reaproveita essas correções automaticamente.
-
-## “Aprender com a internet”
-
-O projeto não faz aprendizado automático irrestrito da internet (isso é inseguro e pode degradar qualidade).
-
-Forma recomendada:
-- atualizar o app periodicamente com:
+### Subir API local
 
 ```bash
-git pull
+cd "/Users/mauriciohenrique/Documents/New project/Real-translator"
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn saas_api.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-- manter melhorias/correções no repositório (histórico versionado e auditável).
+Swagger:
+- `http://127.0.0.1:8080/docs`
 
-## STT (fala -> texto)
-
-Estratégia híbrida:
-- `faster-whisper` local (principal)
-- Google Speech Recognition (fallback)
-
-O backend ativo aparece no log ao iniciar.
-
-## Comandos úteis
-
-Listar microfones:
+### Variáveis de ambiente
 
 ```bash
-python main_web.py --list-mics
+export STRIPE_SECRET_KEY="sk_test_..."
+export STRIPE_WEBHOOK_SECRET="whsec_..."
+export RT_API_DB_URL="sqlite:///./saas_api.db"
 ```
 
-Selecionar microfone:
+### Endpoints principais
+
+- `POST /v1/admin/companies`
+  - cria empresa, assinatura e API key
+- `POST /v1/translate`
+  - traduz texto com autenticação por `X-API-Key`
+- `GET /v1/usage`
+  - retorna consumo mensal
+- `POST /v1/billing/stripe/webhook`
+  - sincroniza status da assinatura com Stripe
+
+### Exemplo de criação de empresa
 
 ```bash
-python main_web.py --mic-index 0 --host 127.0.0.1 --port 7892
+curl -X POST "http://127.0.0.1:8080/v1/admin/companies" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corp",
+    "email": "billing@acme.com",
+    "plan_code": "business"
+  }'
 ```
 
-Porta diferente:
+### Exemplo de tradução
 
 ```bash
-python main_web.py --host 127.0.0.1 --port 7893
+curl -X POST "http://127.0.0.1:8080/v1/translate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: rt_..." \
+  -d '{
+    "text": "Good morning, how are you?",
+    "source": "en",
+    "target": "pt",
+    "estimated_minutes": 1
+  }'
 ```
 
-## Build app macOS (.app)
+## 3) Android e iOS
+
+Para Android/iOS, o app mobile não precisa rodar STT localmente no início.
+Fluxo recomendado:
+- Captura áudio no celular
+- Converte para texto (STT local ou API externa)
+- Envia texto para `POST /v1/translate`
+- Exibe tradução ao usuário
+
+Ou seja: o backend já está pronto para integração mobile via HTTP.
+
+## 4) Virar programa instalável
+
+### macOS (.app)
 
 ```bash
 ./scripts/build_macos_app.sh
@@ -101,11 +108,25 @@ python main_web.py --host 127.0.0.1 --port 7893
 Saída:
 - `dist/RealTranslator.app`
 
-## Estrutura principal
+## 5) Aprendizado com usuários
+
+O app web salva correções locais em:
+- `learning_memory.db`
+
+Assim ele melhora frases recorrentes no próprio ambiente do usuário.
+
+## 6) Estrutura
 
 ```text
 main_web.py
 main_desktop.py
+saas_api/
+  app.py
+  config.py
+  db.py
+  models.py
+  schemas.py
+  service.py
 scripts/
   install_and_run.sh
   build_macos_app.sh
@@ -118,13 +139,3 @@ real_time_translator/
   ui/web_app.py
   learning/memory.py
 ```
-
-## Troubleshooting rápido
-
-- Não reconhece fala:
-  - `CALIBRAR` em silêncio por 2s.
-  - confirme permissões de microfone do Terminal/Python no macOS.
-- Porta ocupada:
-  - troque para `--port 7893`.
-- Ambiente virtual:
-  - rode `source .venv/bin/activate`.
