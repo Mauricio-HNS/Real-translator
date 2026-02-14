@@ -327,12 +327,6 @@ class AppController:
                     lowered = max(85, current - 18)
                     if lowered != current:
                         self._capture.recognizer.energy_threshold = lowered
-                else:
-                    current = int(self._capture.recognizer.energy_threshold)
-                    lowered = max(85, current - 26)
-                    if lowered != current:
-                        self._capture.recognizer.energy_threshold = lowered
-                        self._manual_threshold = lowered
                 if self._unknown_counter % 4 == 0:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
@@ -742,10 +736,7 @@ class AppController:
 
     def settings_snapshot(self) -> tuple[str, int, float]:
         with self._lock:
-            mode = self._sensitivity_mode
-            pause = self._pause_threshold
-        current_threshold = int(self._capture.recognizer.energy_threshold)
-        return mode, current_threshold, pause
+            return self._sensitivity_mode, self._manual_threshold, self._pause_threshold
 
     def metrics_snapshot(self) -> str:
         with self._lock:

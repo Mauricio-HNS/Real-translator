@@ -196,23 +196,39 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             calibrate_update,
         )
 
+    def refresh_live() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
+        status, original, translated, logs = controller.snapshot()
+        power_badge, on_update, off_update, calibrate_update = _power_visual()
+        spectrum_html = _spectrum_visual()
+        return (
+            status,
+            original,
+            translated,
+            logs,
+            power_badge,
+            spectrum_html,
+            on_update,
+            off_update,
+            calibrate_update,
+        )
+
     def bootstrap() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         if not auto_boot_done["value"]:
             controller.prepare_default()
             auto_boot_done["value"] = True
         return refresh()
 
-    def on_start() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def on_start() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
         controller.start()
-        return refresh()
+        return refresh_live()
 
-    def on_stop() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def on_stop() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
         controller.stop()
-        return refresh()
+        return refresh_live()
 
-    def on_calibrate() -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
+    def on_calibrate() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
         controller.recalibrate(seconds=1.6)
-        return refresh()
+        return refresh_live()
 
     def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, dict, dict, dict]:
         controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.60)
@@ -233,7 +249,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         sensitivity = gr.Slider(
             minimum=60,
             maximum=3200,
-            step=20,
+            step=5,
             value=900,
             label="Sensibilidade (baixo = mais sensível)",
         )
@@ -259,21 +275,21 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
         auto_refresh_timer = gr.Timer(1.0)
         auto_refresh_timer.tick(
-            fn=refresh,
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            fn=refresh_live,
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
         on_btn.click(
             fn=on_start,
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         off_btn.click(
             fn=on_stop,
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         calibrate_btn.click(
             fn=on_calibrate,
-            outputs=[status, original, translated, logs, sensitivity, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
         apply_sens_btn.click(
             fn=on_sensitivity,
