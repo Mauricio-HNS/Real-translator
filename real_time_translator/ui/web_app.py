@@ -32,7 +32,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       width: 100vw !important;
       padding: 0 !important;
       height: 100dvh;
-      overflow: hidden;
+      overflow: auto;
       box-sizing: border-box;
     }
     .gradio-container h1, .gradio-container h2, .gradio-container h3, .gradio-container label {
@@ -86,7 +86,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       display: flex;
       flex-direction: column;
       gap: 8px;
-      overflow: hidden;
+      overflow: auto;
       box-sizing: border-box;
     }
     #main-readouts {
