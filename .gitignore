@@ -5,3 +5,4 @@ build/
 dist/
 *.spec
 learning_memory.db
+saas_api.db
