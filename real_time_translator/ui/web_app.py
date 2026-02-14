@@ -29,7 +29,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       color: var(--text);
       font-family: "Avenir Next", "Segoe UI", sans-serif;
       max-width: 100vw !important;
-      padding: 8px !important;
+      width: 100vw !important;
+      padding: 0 !important;
       height: 100dvh;
       overflow: hidden;
       box-sizing: border-box;
@@ -69,14 +70,15 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       transition: all 0.15s ease;
     }
     #theme-shell {
-      padding: 14px;
-      border-radius: 24px;
+      padding: 12px;
+      border-radius: 0;
       background: linear-gradient(165deg, #2f313d, #252732);
       box-shadow: inset 1px 1px 0 #4a4e61, inset -1px -1px 0 #1d2029, 12px 12px 30px #191b23;
-      border: 1px solid #383b4a;
-      max-width: 1120px;
-      margin: 0 auto;
-      height: calc(100dvh - 24px);
+      border: none;
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -206,8 +208,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       }
     }
     @media (max-width: 1000px) {
-      .gradio-container { padding: 4px !important; }
-      #theme-shell { border-radius: 14px; }
+      .gradio-container { padding: 0 !important; }
+      #theme-shell { border-radius: 0; }
       #title-main h1 { font-size: 22px !important; }
       #main-readouts {
         flex-direction: column;
