@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+import random
+
 import gradio as gr
 
 from real_time_translator.app_controller import AppController
@@ -8,66 +11,86 @@ from real_time_translator.app_controller import AppController
 def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     controller = AppController(mic_index=mic_index)
     auto_boot_done = {"value": False}
+    wave_phase = {"value": 0.0}
     ui_css = """
     :root {
-      --bg: #1f2129;
-      --bg-soft: #2a2d37;
-      --card: #2b2e39;
-      --card-2: #242733;
-      --text: #e6ecf8;
-      --muted: #a9b4ca;
-      --green: #27c87a;
-      --green-glow: rgba(39, 200, 122, 0.65);
-      --shadow-dark: #1a1c24;
-      --shadow-light: #3b3e4d;
-      --cyan: #5bd5ff;
-      --magenta: #d05bff;
-      --orange: #ff9f66;
+      --bg: #0c0f0d;
+      --bg-soft: #1a1f1b;
+      --card: #121612;
+      --card-2: #0e120f;
+      --text: #edf3ec;
+      --muted: #9fb29e;
+      --green: #8cff00;
+      --green-glow: rgba(140, 255, 0, 0.65);
+      --shadow-dark: #040604;
+      --shadow-light: #2a3029;
+      --steel: #dfe4de;
+      --graphite: #171b17;
     }
     .gradio-container {
-      background: radial-gradient(circle at 20% -8%, #383c4c, #242732 42%, #1d1f28 100%);
+      background:
+        radial-gradient(circle at 8% 12%, rgba(139, 255, 0, 0.12), transparent 32%),
+        radial-gradient(circle at 88% 78%, rgba(139, 255, 0, 0.08), transparent 30%),
+        linear-gradient(160deg, #0b0f0c 0%, #111611 42%, #0c100d 100%);
       color: var(--text);
-      font-family: "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
       max-width: 100vw !important;
       width: 100vw !important;
       padding: 0 !important;
-      height: 100dvh;
-      overflow: auto;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      overflow-y: auto;
       box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: #4c5470 #242732;
+    }
+    .gradio-container ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .gradio-container ::-webkit-scrollbar-track {
+      background: #242732;
+    }
+    .gradio-container ::-webkit-scrollbar-thumb {
+      background: #4c5470;
+      border-radius: 999px;
     }
     .gradio-container h1, .gradio-container h2, .gradio-container h3, .gradio-container label {
       color: var(--text) !important;
       letter-spacing: 0.5px;
     }
     .gradio-container .block {
-      background: var(--card);
+      background: linear-gradient(160deg, #141914, #0e120f);
       border: none !important;
-      border-radius: 16px !important;
-      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px #343845 !important;
-      border: 1px solid rgba(175, 190, 220, 0.08) !important;
+      border-radius: 10px !important;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34) !important;
+      border: 1px solid rgba(223, 228, 222, 0.08) !important;
+      overflow: visible !important;
     }
     .gradio-container textarea, .gradio-container input {
-      background: var(--card-2) !important;
+      background: linear-gradient(180deg, #0d110e, #101510) !important;
       border: none !important;
-      border-radius: 12px !important;
-      box-shadow: inset 5px 5px 10px #1f2129, inset -5px -5px 10px #373b48 !important;
-      color: #eff4ff !important;
+      border-radius: 8px !important;
+      box-shadow: inset 0 0 0 1px rgba(223, 228, 222, 0.12), inset 0 0 18px rgba(140, 255, 0, 0.06) !important;
+      color: #f1f6ef !important;
       font-size: 14px !important;
       line-height: 1.4 !important;
     }
     .gradio-container button {
       border: none !important;
-      border-radius: 12px !important;
+      border-radius: 8px !important;
       font-weight: 700 !important;
-      box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light) !important;
-      background: linear-gradient(160deg, #363948, #252833) !important;
-      color: #d6deef !important;
+      box-shadow: 0 1px 0 rgba(223, 228, 222, 0.12), 0 8px 18px rgba(0, 0, 0, 0.3) !important;
+      background: linear-gradient(160deg, #161b17, #0f130f) !important;
+      color: #e5ece3 !important;
       min-height: 42px !important;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .gradio-container button.primary {
-      background: linear-gradient(160deg, #23b95f, #13874a) !important;
-      color: #f6fff9 !important;
-      box-shadow: 0 0 20px var(--green-glow), 7px 7px 14px #183225 !important;
+      background: linear-gradient(165deg, #98ff1a, #62c900) !important;
+      color: #091007 !important;
+      box-shadow: 0 0 16px rgba(140, 255, 0, 0.38), 0 8px 18px rgba(0, 0, 0, 0.26) !important;
     }
     .gradio-container button:hover {
       transform: translateY(-1px);
@@ -76,21 +99,22 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     #theme-shell {
       padding: 12px;
       border-radius: 0;
-      background: linear-gradient(165deg, #2d303c, #242733);
-      box-shadow: inset 1px 1px 0 #4a4e61, inset -1px -1px 0 #1d2029;
+      background: linear-gradient(180deg, #101510, #0b0e0b);
+      box-shadow: inset 0 0 0 1px rgba(223, 228, 222, 0.08);
       border: none;
       width: 100%;
       max-width: 100%;
       margin: 0;
-      height: 100dvh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      overflow: auto;
+      overflow: visible;
       box-sizing: border-box;
+      position: relative;
     }
     #main-readouts {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       min-height: 0;
       display: flex;
       gap: 10px;
@@ -102,24 +126,41 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     #eq-strip {
       margin: 2px 0 10px 0;
       padding: 10px 12px;
-      background: linear-gradient(180deg, #2a2c37, #1f222c);
-      border-radius: 16px;
-      box-shadow: inset 3px 3px 8px #1a1c23, inset -3px -3px 8px #333644;
-      border: 1px solid rgba(170, 190, 235, 0.08);
+      background: linear-gradient(180deg, #0d110e, #111611);
+      border-radius: 8px;
+      box-shadow: inset 0 0 0 1px rgba(223, 228, 222, 0.08);
+      border: 1px solid rgba(223, 228, 222, 0.08);
     }
     .eq-bars {
-      display: grid;
-      grid-template-columns: repeat(14, 1fr);
-      gap: 5px;
-      align-items: end;
-      height: 58px;
-    }
-    .eq-bar {
       width: 100%;
-      border-radius: 4px 4px 2px 2px;
-      background: linear-gradient(180deg, var(--orange), #ff5e86, var(--magenta), #6fa8ff);
-      opacity: 0.82;
-      transition: height 0.22s ease-out, filter 0.22s ease-out;
+      height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .eq-canvas {
+      position: relative;
+      width: 100%;
+      height: 62px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, rgba(140,255,0,0.04), rgba(140,255,0,0.01));
+      overflow: hidden;
+    }
+    .eq-base {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 31px;
+      height: 1px;
+      background: rgba(140,255,0,0.16);
+    }
+    .eq-seg {
+      position: absolute;
+      height: 2px;
+      border-radius: 2px;
+      background: #8cff00;
+      box-shadow: 0 0 6px rgba(140,255,0,0.52);
+      transform-origin: 0 50%;
     }
     @keyframes knob-spin {
       0% { transform: rotate(0deg); }
@@ -141,11 +182,11 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       width: 86px;
       height: 86px;
       border-radius: 999px;
-      background: radial-gradient(circle at 30% 25%, #3c4050, #252933 65%);
-      box-shadow: 9px 9px 20px #171922, -7px -7px 15px #3a3e4e, inset 1px 1px 0 #4b4f62;
+      background: radial-gradient(circle at 28% 24%, #2b312b, #0e130f 65%);
+      box-shadow: 0 0 0 1px rgba(223, 228, 222, 0.2), 0 8px 22px rgba(0, 0, 0, 0.55), 0 0 18px rgba(140, 255, 0, 0.12);
       position: relative;
       transition: transform 0.2s ease;
-      animation: knob-spin 6.5s linear infinite;
+      animation: knob-spin 14s linear infinite;
     }
     .neo-knob::after {
       content: "";
@@ -155,45 +196,32 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       left: 40px;
       top: 10px;
       border-radius: 999px;
-      background: linear-gradient(180deg, var(--cyan), #4a9dff);
-      box-shadow: 0 0 12px rgba(91, 213, 255, 0.8);
+      background: linear-gradient(180deg, #e8efe8, #b8c4b6);
+      box-shadow: 0 0 10px rgba(232, 239, 232, 0.35);
     }
-    .knob-two { animation-duration: 7.2s; }
-    .knob-three { animation-duration: 5.4s; animation-direction: reverse; }
+    .knob-two { animation-duration: 16s; }
+    .knob-three { animation-duration: 12s; animation-direction: reverse; }
     .neo-label {
       margin-top: 9px;
-      color: var(--muted);
+      color: #c6d2c4;
       font-size: 13px;
       text-align: center;
       letter-spacing: 0.6px;
     }
-    .slider-ruler {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin: 4px 8px 0 8px;
-      color: #9fb0cb;
-      font-size: 11px;
-      letter-spacing: 0.4px;
+    #status-box textarea {
+      min-height: 46px !important;
+      max-height: 56px !important;
+      overflow: hidden !important;
     }
-    .slider-ruler span::before {
-      content: "";
-      display: block;
-      width: 1px;
-      height: 8px;
-      margin: 0 auto 3px auto;
-      background: #7d89a0;
-      opacity: 0.8;
+    #logs-box textarea {
+      min-height: 104px !important;
+      max-height: 130px !important;
+      overflow-y: auto !important;
     }
-    #status-box textarea { min-height: 46px !important; max-height: 56px !important; }
-    #logs-box textarea { min-height: 74px !important; max-height: 82px !important; }
-    #orig-box textarea, #trans-box textarea {
-      height: clamp(210px, 36dvh, 410px) !important;
-      min-height: 180px !important;
-    }
+    #orig-box textarea, #trans-box textarea { min-height: 220px !important; max-height: 40dvh !important; overflow-y: auto !important; }
     #power-led { margin: 6px 0 4px; }
     #title-main h1 {
-      text-shadow: 0 0 18px rgba(150, 170, 255, 0.25);
+      text-shadow: 0 0 10px rgba(140, 255, 0, 0.2);
       font-weight: 700;
       font-size: 30px !important;
       margin-bottom: 4px !important;
@@ -204,8 +232,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       .eq-bars { height: 68px; }
       #theme-shell { padding: 10px; }
       #orig-box textarea, #trans-box textarea {
-        height: clamp(150px, 30dvh, 250px) !important;
+        min-height: 160px !important;
+        max-height: 30dvh !important;
       }
+      #logs-box textarea { min-height: 82px !important; max-height: 94px !important; }
     }
     @media (max-width: 1000px) {
       .gradio-container { padding: 0 !important; }
@@ -215,7 +245,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         flex-direction: column;
       }
       #orig-box textarea, #trans-box textarea {
-        height: clamp(120px, 20dvh, 200px) !important;
+        min-height: 180px !important;
+        max-height: 32dvh !important;
       }
     }
     """
@@ -223,8 +254,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
     def _power_visual() -> tuple[str, dict, dict, dict]:
         running = controller.is_running()
         label = "LIGADO" if running else "DESLIGADO"
-        color = "#18a55a" if running else "#5e6a63"
-        glow = "0 0 6px rgba(24,165,90,0.75), 0 0 22px rgba(24,165,90,0.65)" if running else "none"
+        color = "#8cff00" if running else "#5e6a63"
+        glow = "0 0 10px rgba(140,255,0,0.9), 0 0 28px rgba(140,255,0,0.7)" if running else "none"
         badge = (
             "<div style='display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;'>"
             f"<span style='width:15px;height:15px;border-radius:999px;background:{color};box-shadow:{glow};display:inline-block;animation:ledspin 1.2s infinite;'></span>"
@@ -242,22 +273,42 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         for i in range(0, len(raw_bins), 2):
             segment = raw_bins[i : i + 2]
             bins.append(int(sum(segment) / max(1, len(segment))))
-        bars: list[str] = []
-        total = max(1, len(bins) - 1)
-        for idx, value in enumerate(bins):
-            t = idx / total
-            hue = 130 + int(t * 150)  # green -> blue -> purple
-            sat = 90
-            light = 58
-            bars.append(
-                f"<span class='eq-bar' style='height:{max(6, min(66, value))}px;"
-                f"background:linear-gradient(180deg, hsl({hue}, {sat}%, {light + 8}%), hsl({hue + 8}, {sat}%, {light - 12}%));'></span>"
-            )
-        return "<div id='eq-strip'><div class='eq-bars'>" + "".join(bars) + "</div></div>"
 
-    def refresh() -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
+        avg_level = sum(bins) / max(1, len(bins))
+        amp = max(3.0, min(22.0, 4.0 + (avg_level * 0.15)))
+        width = 560.0
+        height = 62.0
+        base = height / 2.0
+        n = 54
+        dx = width / (n - 1)
+        phase = wave_phase["value"]
+        wave_phase["value"] = (phase + 0.35) % (2.0 * math.pi)
+
+        points: list[tuple[float, float]] = []
+        for i in range(n):
+            x = i * dx
+            b = bins[i % max(1, len(bins))]
+            bin_factor = min(1.35, max(0.15, b / 80.0))
+            wobble = (random.uniform(-0.35, 0.35) * amp * 0.35)
+            y = base + (amp * 0.55 * bin_factor) * math.sin((i * 0.55) + phase) + wobble
+            y = max(4.0, min(height - 4.0, y))
+            points.append((x, y))
+
+        segments: list[str] = ["<div class='eq-base'></div>"]
+        for i in range(n - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            ddx = x2 - x1
+            ddy = y2 - y1
+            dist = (ddx * ddx + ddy * ddy) ** 0.5
+            angle = math.degrees(math.atan2(ddy, ddx))
+            segments.append(
+                f"<span class='eq-seg' style='left:{x1:.2f}px;top:{y1:.2f}px;width:{dist:.2f}px;transform:rotate({angle:.2f}deg)'></span>"
+            )
+        return "<div id='eq-strip'><div class='eq-bars'><div class='eq-canvas'>" + "".join(segments) + "</div></div></div>"
+
+    def refresh() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
         status, original, translated, logs = controller.snapshot()
-        _mode, threshold, _pause = controller.settings_snapshot()
         power_badge, on_update, off_update, calibrate_update = _power_visual()
         spectrum_html = _spectrum_visual()
         return (
@@ -265,8 +316,6 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             original,
             translated,
             logs,
-            threshold,
-            f"Régua atual: {threshold}",
             power_badge,
             spectrum_html,
             on_update,
@@ -290,7 +339,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             calibrate_update,
         )
 
-    def bootstrap() -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
+    def bootstrap() -> tuple[str, str, str, str, str, str, dict, dict, dict]:
         if not auto_boot_done["value"]:
             controller.prepare_default()
             auto_boot_done["value"] = True
@@ -308,14 +357,27 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         controller.recalibrate(seconds=1.6)
         return refresh_live()
 
-    def on_sensitivity(threshold: int) -> tuple[str, str, str, str, int, str, str, str, dict, dict, dict]:
-        controller.apply_sensitivity(mode="manual", manual_threshold=threshold, pause_threshold=0.60)
-        return refresh()
+    def on_learn(correct_en: str, correct_pt: str) -> tuple[str, str, str, str, str, str, dict, dict, dict, dict, dict]:
+        controller.learn_from_feedback(correct_en, correct_pt)
+        status, original, translated, logs, power, spectrum, on_u, off_u, cal_u = refresh_live()
+        return (
+            status,
+            original,
+            translated,
+            logs,
+            power,
+            spectrum,
+            on_u,
+            off_u,
+            cal_u,
+            gr.update(value=""),
+            gr.update(value=""),
+        )
 
     with gr.Blocks(title="Real-Time Translator", css=ui_css) as app:
         with gr.Column(elem_id="theme-shell"):
-            gr.Markdown("# Real-Time Translator", elem_id="title-main")
-            gr.HTML("<div style='color:#9fb0cc;font-size:13px;margin:-6px 0 6px 2px;letter-spacing:0.5px;'>Live Call Translation Console</div>")
+            gr.Markdown("# Tradutor em Tempo Real", elem_id="title-main")
+            gr.HTML("<div style='color:#9fb0cc;font-size:13px;margin:-6px 0 6px 2px;letter-spacing:0.5px;'>Console de Tradução de Chamadas ao Vivo</div>")
             spectrum_top = gr.HTML(value="<div id='eq-strip'><div class='eq-bars'></div></div>")
 
             power_status = gr.HTML(elem_id="power-led")
@@ -323,23 +385,18 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             with gr.Row():
                 on_btn = gr.Button("LIGAR", variant="primary")
                 off_btn = gr.Button("DESLIGAR")
-                calibrate_btn = gr.Button("Calibrar")
+                calibrate_btn = gr.Button("CALIBRAR")
 
-            sensitivity = gr.Slider(
-                minimum=60,
-                maximum=3200,
-                step=5,
-                value=900,
-                label="Sensibilidade (baixo = mais sensível)",
-            )
-            gr.HTML(
-                "<div class='slider-ruler'>"
-                "<span>60</span><span>400</span><span>800</span><span>1200</span>"
-                "<span>1800</span><span>2400</span><span>3200</span>"
-                "</div>"
-            )
-            sensitivity_value = gr.Textbox(label="Régua de Sensibilidade", interactive=False, value="Régua atual: 900")
-            apply_sens_btn = gr.Button("Aplicar Sensibilidade")
+            with gr.Row():
+                learn_en = gr.Textbox(
+                    label="Aprender Inglês (opcional)",
+                    placeholder="Deixe vazio para usar a última frase capturada",
+                )
+                learn_pt = gr.Textbox(
+                    label="Tradução PT preferida (opcional)",
+                    placeholder="Deixe vazio para auto-gerar",
+                )
+            learn_btn = gr.Button("Aprender correção")
 
             with gr.Row(elem_id="main-readouts"):
                 original = gr.Textbox(label="Inglês", lines=8, interactive=False, elem_id="orig-box")
@@ -356,10 +413,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
 
         app.load(
             fn=bootstrap,
-            outputs=[status, original, translated, logs, sensitivity, sensitivity_value, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
 
-        auto_refresh_timer = gr.Timer(1.35)
+        auto_refresh_timer = gr.Timer(0.2)
         auto_refresh_timer.tick(
             fn=refresh_live,
             outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
@@ -377,10 +434,10 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
             fn=on_calibrate,
             outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
         )
-        apply_sens_btn.click(
-            fn=on_sensitivity,
-            inputs=[sensitivity],
-            outputs=[status, original, translated, logs, sensitivity, sensitivity_value, power_status, spectrum_top, on_btn, off_btn, calibrate_btn],
+        learn_btn.click(
+            fn=on_learn,
+            inputs=[learn_en, learn_pt],
+            outputs=[status, original, translated, logs, power_status, spectrum_top, on_btn, off_btn, calibrate_btn, learn_en, learn_pt],
         )
 
     return app

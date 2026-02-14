@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import audioop
 from array import array
+from queue import Empty, Full, Queue
 import re
 import threading
+import time
 import traceback
 from datetime import datetime
 
@@ -12,7 +14,8 @@ import numpy as np
 
 from real_time_translator.audio.capture import AudioCapture
 from real_time_translator.config import DEFAULT_CONFIG
-from real_time_translator.stt.provider import GoogleSTTProvider
+from real_time_translator.learning import LearningMemory
+from real_time_translator.stt.provider import HybridSTTProvider
 from real_time_translator.translation.provider import GoogleTranslationProvider
 from real_time_translator.translation.translator import Translator
 
@@ -30,13 +33,14 @@ class AppController:
     def __init__(self, mic_index: int | None = None) -> None:
         self._mic_index = mic_index
         self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
-        self._stt = GoogleSTTProvider(language=DEFAULT_CONFIG.source_speech_language)
+        self._stt = HybridSTTProvider(language=DEFAULT_CONFIG.source_speech_language)
         self._translator = Translator(
             GoogleTranslationProvider(
                 source=DEFAULT_CONFIG.source_translation_language,
                 target=DEFAULT_CONFIG.target_translation_language,
             )
         )
+        self._memory = LearningMemory()
         self._running = False
         self._starting = False
         self._status = "Ready"
@@ -54,13 +58,20 @@ class AppController:
         self._auto_meter_samples = 0
         self._pending_phrase = ""
         self._pending_chunks = 0
+        self._pending_started_at = 0.0
         self._spectrum_bins: list[int] = [18] * 28
         self._last_sensitivity_signature: tuple[str, int, float] = ("", -1, -1.0)
+        self._audio_queue: Queue[tuple[sr.AudioData, int]] = Queue(maxsize=8)
+        self._worker_stop = threading.Event()
+        self._worker_thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._capture.set_sensitivity(
             mode=self._sensitivity_mode,
             manual_threshold=self._manual_threshold,
             pause_threshold=self._pause_threshold,
+        )
+        self._events.append(
+            f"[{datetime.now().strftime('%H:%M:%S')}] STT backend: {self._stt.backend_name()}"
         )
 
     @staticmethod
@@ -296,49 +307,79 @@ class AppController:
 
         try:
             level = self._audio_level(audio)
+            # Ignore only near-zero chunks; some mics report useful speech around low RMS values.
+            if level < 6:
+                return
             if level > 0:
                 with self._lock:
                     self._last_level = level
                 self._auto_adjust_for_distance(level)
             self._update_spectrum(audio)
+            try:
+                self._audio_queue.put_nowait((audio, level))
+            except Full:
+                try:
+                    self._audio_queue.get_nowait()
+                except Empty:
+                    pass
+                try:
+                    self._audio_queue.put_nowait((audio, level))
+                except Full:
+                    pass
+        except Exception:  # noqa: BLE001
+            return
 
-            original = self._transcribe_far_field(recognizer, audio, level)
+    def _audio_worker_loop(self) -> None:
+        while not self._worker_stop.is_set():
+            try:
+                audio, level = self._audio_queue.get(timeout=0.2)
+            except Empty:
+                continue
+            try:
+                self._process_audio_chunk(audio, level)
+            finally:
+                try:
+                    self._audio_queue.task_done()
+                except ValueError:
+                    pass
+
+    def _process_audio_chunk(self, audio: sr.AudioData, level: int) -> None:
+        if not self._running:
+            return
+
+        try:
+            original = self._transcribe_far_field(self._capture.recognizer, audio, level)
             stable_original = self._accumulate_phrase(original)
             if not stable_original:
                 return
-            translated = self._safe_translate(stable_original)
+            learned_original, preferred_translation = self._memory.resolve(stable_original)
+            translated = preferred_translation or self._safe_translate(learned_original)
             stamp = datetime.now().strftime("%H:%M:%S")
 
             with self._lock:
-                self._original_lines.append(f"[{stamp}] {stable_original}")
+                self._original_lines.append(f"[{stamp}] {learned_original}")
                 self._translated_lines.append(f"[{stamp}] {translated}")
                 self._original_lines = self._original_lines[-300:]
                 self._translated_lines = self._translated_lines[-300:]
                 self._unknown_counter = 0
                 self._captured_count += 1
-                self._last_original = stable_original
+                self._last_original = learned_original
                 self._events.append(f"[{stamp}] Captured and translated successfully.")
+                if learned_original != stable_original:
+                    self._events.append(f"[{stamp}] Learning memory applied to phrase.")
                 self._events = self._events[-120:]
         except sr.UnknownValueError:
             with self._lock:
                 self._unknown_counter += 1
                 if self._sensitivity_mode == "auto":
                     current = int(self._capture.recognizer.energy_threshold)
-                    lowered = max(85, current - 18)
+                    lowered = max(90, current - 6)
                     if lowered != current:
                         self._capture.recognizer.energy_threshold = lowered
-                if self._unknown_counter % 4 == 0:
+                if self._unknown_counter % 5 == 0:
                     self._status = "Audio detected but speech not recognized yet."
                     self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Speech not recognized (noise/low volume).")
                     self._events = self._events[-120:]
-                if self._unknown_counter % 6 == 0:
-                    stamp = datetime.now().strftime("%H:%M:%S")
-                    self._original_lines.append(f"[{stamp}] xxxxx")
-                    self._translated_lines.append(f"[{stamp}] -----")
-                    self._original_lines = self._original_lines[-300:]
-                    self._translated_lines = self._translated_lines[-300:]
-                    self._pending_phrase = ""
-                    self._pending_chunks = 0
             return
         except sr.RequestError as exc:
             with self._lock:
@@ -373,7 +414,7 @@ class AppController:
     def apply_auto_distance_profile(self, target_meters: float = 1.0) -> str:
         meters = max(0.6, min(1.5, float(target_meters)))
         # For phone speaker at ~1m, start with a lower threshold and adapt upward if noise rises.
-        base_threshold = int(70 + (meters - 1.0) * 90)
+        base_threshold = int(55 + (meters - 1.0) * 80)
         pause = 0.55 if meters <= 1.0 else 0.62
         status = self.apply_sensitivity(mode="auto", manual_threshold=base_threshold, pause_threshold=pause)
         with self._lock:
@@ -446,27 +487,55 @@ class AppController:
         if not text:
             return ""
 
+        now = time.monotonic()
         with self._lock:
-            if self._pending_phrase:
-                combined = f"{self._pending_phrase} {text}".strip()
-            else:
-                combined = text
-
-            self._pending_phrase = combined
-            self._pending_chunks += 1
-
-            words = combined.split()
-            ends_sentence = combined.endswith((".", "?", "!"))
-            long_enough = len(words) >= 6
-            too_many_chunks = self._pending_chunks >= 3
-
-            if not (ends_sentence or long_enough or too_many_chunks):
+            if not self._pending_phrase:
+                self._pending_phrase = text
+                self._pending_chunks = 1
+                self._pending_started_at = now
                 return ""
 
-            finalized = self._pending_phrase
-            self._pending_phrase = ""
-            self._pending_chunks = 0
-            return finalized
+            merged = self._merge_phrase_chunks(self._pending_phrase, text)
+            self._pending_phrase = merged
+            self._pending_chunks += 1
+
+            words = len(merged.split())
+            ends_sentence = merged.endswith((".", "?", "!"))
+            long_enough = words >= 7
+            too_long = words >= 16
+            timed_out = (now - self._pending_started_at) >= 2.8 and words >= 4
+            enough_chunks = self._pending_chunks >= 3
+
+            if ends_sentence or too_long or (enough_chunks and long_enough) or timed_out:
+                finalized = self._pending_phrase
+                self._pending_phrase = ""
+                self._pending_chunks = 0
+                self._pending_started_at = 0.0
+                return finalized
+            return ""
+
+    @staticmethod
+    def _merge_phrase_chunks(previous: str, current: str) -> str:
+        prev = " ".join(previous.strip().split())
+        cur = " ".join(current.strip().split())
+        if not prev:
+            return cur
+        if not cur:
+            return prev
+        if cur.lower() in prev.lower():
+            return prev
+
+        prev_words = prev.split()
+        cur_words = cur.split()
+        max_overlap = min(8, len(prev_words), len(cur_words))
+        overlap = 0
+        for n in range(max_overlap, 0, -1):
+            if [w.lower() for w in prev_words[-n:]] == [w.lower() for w in cur_words[:n]]:
+                overlap = n
+                break
+        if overlap > 0:
+            return " ".join(prev_words + cur_words[overlap:])
+        return f"{prev} {cur}".strip()
 
     def _safe_translate(self, original: str) -> str:
         translated = self._translator.translate(original)
@@ -492,32 +561,36 @@ class AppController:
     def _prepare_audio_attempts(self, audio: sr.AudioData, level: int) -> list[sr.AudioData]:
         attempts: list[sr.AudioData] = []
         gains = self._gain_candidates(level)
+        # Try raw first for clarity, then denoise, then mild gain fallback.
+        attempts.append(audio)
         if gains:
+            boosted_clean = self._boost_audio(audio, gains[0], denoise=True)
+            if boosted_clean is not None:
+                attempts.append(boosted_clean)
             boosted = self._boost_audio(audio, gains[0], denoise=False)
             if boosted is not None:
                 attempts.append(boosted)
-        # Keep raw as final fallback.
-        attempts.append(audio)
         return attempts
 
     @staticmethod
     def _gain_candidates(level: int) -> list[float]:
         if level < 80:
-            return [5.2, 4.1, 3.0]
+            return [2.8, 2.1]
         if level < 130:
-            return [4.1, 3.1, 2.3]
+            return [2.3, 1.9]
         if level < 220:
-            return [3.0, 2.2, 1.7]
+            return [1.9, 1.6]
         if level < 340:
-            return [2.0, 1.6]
+            return [1.6]
         return [1.3]
 
     def _boost_audio(self, audio: sr.AudioData, gain: float, denoise: bool = False) -> sr.AudioData | None:
         try:
             raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
             if gain <= 1.0:
-                return None
-            boosted = audioop.mul(raw, 2, gain)
+                boosted = raw
+            else:
+                boosted = audioop.mul(raw, 2, gain)
             if denoise:
                 boosted = self._speech_denoise_and_normalize(boosted)
             return sr.AudioData(boosted, 16000, 2)
@@ -557,10 +630,12 @@ class AppController:
         recognizer = self._capture.recognizer
         current = int(recognizer.energy_threshold)
         updated = current
-        if level < 100:
-            updated = max(55, current - 34)
-        elif level < 170:
-            updated = max(55, current - 20)
+        if level < 70:
+            updated = max(85, current - 8)
+        elif level < 130:
+            updated = max(85, current - 5)
+        elif level < 190:
+            updated = max(90, current - 3)
         elif level > 1400:
             updated = min(1400, current + 30)
         elif level > 950:
@@ -595,6 +670,7 @@ class AppController:
                 self._capture.stop()
             except Exception:  # noqa: BLE001
                 pass
+            self._stop_worker()
             try:
                 self._capture = AudioCapture(DEFAULT_CONFIG, device_index=self._mic_index)
                 self._capture.set_sensitivity(
@@ -637,8 +713,31 @@ class AppController:
                 return self._status
 
     def _start_listening_sequence(self) -> None:
-        # Low-latency start: avoid blocking calibration on start; use explicit "Calibrar" button when needed.
+        # Decouple capture from STT/translation to keep low-latency audio ingestion.
+        self._start_worker()
         self._capture.start(self._audio_callback)
+
+    def _start_worker(self) -> None:
+        if self._worker_thread is not None and self._worker_thread.is_alive():
+            return
+        self._worker_stop.clear()
+        self._worker_thread = threading.Thread(target=self._audio_worker_loop, daemon=True, name="stt-worker")
+        self._worker_thread.start()
+
+    def _stop_worker(self) -> None:
+        self._worker_stop.set()
+        thread = self._worker_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.2)
+        self._worker_thread = None
+        while True:
+            try:
+                self._audio_queue.get_nowait()
+                self._audio_queue.task_done()
+            except Empty:
+                break
+            except ValueError:
+                break
 
     def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
         clamped_threshold = max(60, min(3200, int(manual_threshold)))
@@ -684,6 +783,7 @@ class AppController:
                 self._running = False
         if was_running:
             self._capture.stop()
+            self._stop_worker()
 
         self._capture.recalibrate(seconds=seconds)
         self._capture.set_sensitivity(
@@ -693,6 +793,7 @@ class AppController:
         )
 
         if was_running:
+            self._start_worker()
             self._capture.start(self._audio_callback)
             with self._lock:
                 self._running = True
@@ -709,8 +810,10 @@ class AppController:
             self._starting = False
             self._pending_phrase = ""
             self._pending_chunks = 0
+            self._pending_started_at = 0.0
 
         self._capture.stop()
+        self._stop_worker()
 
         with self._lock:
             self._status = "Stopped"
@@ -723,6 +826,38 @@ class AppController:
             self._events.clear()
             self._pending_phrase = ""
             self._pending_chunks = 0
+            self._pending_started_at = 0.0
+            return self._status
+
+    def learn_from_feedback(self, corrected_english: str, preferred_portuguese: str) -> str:
+        corrected_clean = " ".join((corrected_english or "").strip().split())
+        preferred_clean = " ".join((preferred_portuguese or "").strip().split())
+        with self._lock:
+            base_phrase = self._last_original
+
+        source_key = corrected_clean or base_phrase
+        if not source_key:
+            with self._lock:
+                self._status = "Learning skipped: no phrase available."
+                self._events.append(f"[{datetime.now().strftime('%H:%M:%S')}] Learning skipped (no source phrase).")
+                self._events = self._events[-120:]
+                return self._status
+
+        if not corrected_clean:
+            corrected_clean = source_key
+        if not preferred_clean:
+            preferred_clean = self._safe_translate(corrected_clean)
+
+        self._memory.remember(source_key, corrected_clean, preferred_clean)
+        if base_phrase and base_phrase != source_key:
+            self._memory.remember(base_phrase, corrected_clean, preferred_clean)
+
+        with self._lock:
+            self._status = f"Learning saved ({self._memory.count()} phrases)."
+            self._events.append(
+                f"[{datetime.now().strftime('%H:%M:%S')}] Learning saved: '{source_key[:48]}' -> '{corrected_clean[:48]}'"
+            )
+            self._events = self._events[-120:]
             return self._status
 
     def snapshot(self) -> tuple[str, str, str, str]:

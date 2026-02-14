@@ -63,11 +63,11 @@ class AudioCapture:
             self._recognizer.dynamic_energy_threshold = False
             self._recognizer.energy_threshold = max(100, min(4000, int(manual_threshold)))
         else:
+            # Auto mode: allow recognizer to adapt to environment noise dynamically.
             self._recognizer.dynamic_energy_threshold = True
-            # Auto mode tuned for distant speech (~1m): keep a lower floor and react faster.
-            self._recognizer.energy_threshold = max(70, min(1200, int(manual_threshold)))
-            self._recognizer.dynamic_energy_adjustment_damping = 0.1
-            self._recognizer.dynamic_energy_ratio = 1.2
+            self._recognizer.energy_threshold = max(70, min(1400, int(manual_threshold)))
+            self._recognizer.dynamic_energy_adjustment_damping = 0.2
+            self._recognizer.dynamic_energy_ratio = 1.25
 
     def start(self, callback: Callable[[sr.Recognizer, sr.AudioData], None]) -> None:
         self.stop()
@@ -83,11 +83,17 @@ class AudioCapture:
                     self._capture_active.set()
                     microphone = self._create_microphone_with_retry()
                     with microphone as source:
+                        self._recognizer.non_speaking_duration = 0.22
+                        self._recognizer.phrase_threshold = 0.22
                         while not self._worker_stop.is_set():
-                            audio = self._recognizer.record(
-                                source,
-                                duration=max(0.8, float(self._config.phrase_time_limit_seconds)),
-                            )
+                            try:
+                                audio = self._recognizer.listen(
+                                    source,
+                                    timeout=1.0,
+                                    phrase_time_limit=max(1.0, float(self._config.phrase_time_limit_seconds)),
+                                )
+                            except sr.WaitTimeoutError:
+                                continue
                             callback(self._recognizer, audio)
             except Exception:
                 # Let controller surface status/errors; avoid crashing whole process.
