@@ -28,7 +28,8 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       background: radial-gradient(circle at 30% -10%, #3a3d4c, #24262f 45%, #1f2028 100%);
       color: var(--text);
       font-family: "Avenir Next", "Segoe UI", sans-serif;
-      max-width: 1140px !important;
+      max-width: 100vw !important;
+      padding: 8px !important;
     }
     .gradio-container h1, .gradio-container h2, .gradio-container h3, .gradio-container label {
       color: var(--text) !important;
@@ -65,15 +66,17 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       transition: all 0.15s ease;
     }
     #theme-shell {
-      padding: 20px;
+      padding: 14px;
       border-radius: 24px;
       background: linear-gradient(165deg, #2f313d, #252732);
       box-shadow: inset 1px 1px 0 #4a4e61, inset -1px -1px 0 #1d2029, 12px 12px 30px #191b23;
       border: 1px solid #383b4a;
+      max-width: 1120px;
+      margin: 0 auto;
     }
     #eq-strip {
-      margin: 4px 0 14px 0;
-      padding: 16px 18px;
+      margin: 2px 0 10px 0;
+      padding: 12px 14px;
       background: linear-gradient(180deg, #2a2c35, #20222b);
       border-radius: 16px;
       box-shadow: inset 4px 4px 10px #1a1c23, inset -4px -4px 10px #333644;
@@ -83,7 +86,7 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       grid-template-columns: repeat(28, 1fr);
       gap: 3px;
       align-items: end;
-      height: 112px;
+      height: 84px;
     }
     .eq-bar {
       width: 100%;
@@ -98,39 +101,45 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       0%, 100% { transform: scaleY(0.55); filter: brightness(0.8); }
       50% { transform: scaleY(1.0); filter: brightness(1.15); }
     }
+    @keyframes knob-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     @keyframes ledspin {
       0% { box-shadow: 0 0 0 rgba(39,200,122,0.0); }
       50% { box-shadow: 0 0 18px rgba(39,200,122,0.7); }
       100% { box-shadow: 0 0 0 rgba(39,200,122,0.0); }
     }
     #bottom-deco {
-      margin-top: 12px;
+      margin-top: 8px;
       display: flex;
       justify-content: center;
-      gap: 38px;
-      padding: 10px 0 4px;
+      gap: 26px;
+      padding: 6px 0 2px;
     }
     .neo-knob {
-      width: 112px;
-      height: 112px;
+      width: 86px;
+      height: 86px;
       border-radius: 999px;
       background: radial-gradient(circle at 30% 25%, #3c4050, #252933 65%);
       box-shadow: 9px 9px 20px #171922, -7px -7px 15px #3a3e4e, inset 1px 1px 0 #4b4f62;
       position: relative;
       transition: transform 0.2s ease;
-      animation: pulse 2.0s ease-in-out infinite;
+      animation: knob-spin 3.8s linear infinite;
     }
     .neo-knob::after {
       content: "";
       position: absolute;
-      width: 8px;
-      height: 28px;
-      left: 52px;
-      top: 14px;
+      width: 6px;
+      height: 22px;
+      left: 40px;
+      top: 10px;
       border-radius: 999px;
       background: linear-gradient(180deg, var(--cyan), #4a9dff);
       box-shadow: 0 0 12px rgba(91, 213, 255, 0.8);
     }
+    .knob-two { animation-duration: 4.5s; }
+    .knob-three { animation-duration: 2.9s; animation-direction: reverse; }
     .neo-label {
       margin-top: 9px;
       color: var(--muted);
@@ -156,12 +165,24 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
       background: #7d89a0;
       opacity: 0.8;
     }
-    #status-box textarea { min-height: 62px !important; }
-    #logs-box textarea { min-height: 130px !important; }
+    #status-box textarea { min-height: 52px !important; }
+    #logs-box textarea { min-height: 90px !important; }
     #power-led { margin: 6px 0 4px; }
     #title-main h1 {
       text-shadow: 0 0 18px rgba(150, 170, 255, 0.25);
       font-weight: 700;
+      font-size: 28px !important;
+      margin-bottom: 4px !important;
+    }
+    @media (max-height: 860px) {
+      #bottom-deco { display: none; }
+      .eq-bars { height: 68px; }
+      #theme-shell { padding: 10px; }
+    }
+    @media (max-width: 1000px) {
+      .gradio-container { padding: 4px !important; }
+      #theme-shell { border-radius: 14px; }
+      #title-main h1 { font-size: 22px !important; }
     }
     """
 
@@ -282,15 +303,15 @@ def build_web_app(mic_index: int | None = None) -> gr.Blocks:
         apply_sens_btn = gr.Button("Aplicar Sensibilidade")
 
         with gr.Row():
-            original = gr.Textbox(label="Inglês", lines=14, interactive=False)
-            translated = gr.Textbox(label="Português", lines=14, interactive=False)
-        logs = gr.Textbox(label="Logs do Programa", lines=7, interactive=False, elem_id="logs-box")
+            original = gr.Textbox(label="Inglês", lines=10, interactive=False)
+            translated = gr.Textbox(label="Português", lines=10, interactive=False)
+        logs = gr.Textbox(label="Logs do Programa", lines=5, interactive=False, elem_id="logs-box")
 
         gr.HTML(
             "<div id='bottom-deco'>"
             "<div><div class='neo-knob'></div><div class='neo-label'>INPUT</div></div>"
-            "<div><div class='neo-knob'></div><div class='neo-label'>FILTER</div></div>"
-            "<div><div class='neo-knob'></div><div class='neo-label'>OUTPUT</div></div>"
+            "<div><div class='neo-knob knob-two'></div><div class='neo-label'>FILTER</div></div>"
+            "<div><div class='neo-knob knob-three'></div><div class='neo-label'>OUTPUT</div></div>"
             "</div>"
         )
 
