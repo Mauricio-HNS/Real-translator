@@ -24,9 +24,17 @@ class AppController:
         )
         self._running = False
         self._status = "Ready"
+        self._sensitivity_mode = "auto"
+        self._manual_threshold = DEFAULT_CONFIG.energy_threshold
+        self._pause_threshold = 0.6
         self._original_lines: list[str] = []
         self._translated_lines: list[str] = []
         self._lock = threading.Lock()
+        self._capture.set_sensitivity(
+            mode=self._sensitivity_mode,
+            manual_threshold=self._manual_threshold,
+            pause_threshold=self._pause_threshold,
+        )
 
     @staticmethod
     def list_microphones() -> list[str]:
@@ -71,6 +79,51 @@ class AppController:
             self._status = "Listening..."
             return self._status
 
+    def apply_sensitivity(self, mode: str, manual_threshold: int, pause_threshold: float) -> str:
+        with self._lock:
+            self._sensitivity_mode = "manual" if (mode or "").lower() == "manual" else "auto"
+            self._manual_threshold = int(manual_threshold)
+            self._pause_threshold = float(pause_threshold)
+
+        self._capture.set_sensitivity(
+            mode=self._sensitivity_mode,
+            manual_threshold=self._manual_threshold,
+            pause_threshold=self._pause_threshold,
+        )
+
+        with self._lock:
+            effective = (
+                f"manual={self._manual_threshold}"
+                if self._sensitivity_mode == "manual"
+                else "auto"
+            )
+            self._status = f"Sensitivity applied ({effective}, pause={self._pause_threshold:.2f})"
+            return self._status
+
+    def recalibrate(self, seconds: float = 1.0) -> str:
+        with self._lock:
+            was_running = self._running
+            if was_running:
+                self._running = False
+        if was_running:
+            self._capture.stop()
+
+        self._capture.recalibrate(seconds=seconds)
+        self._capture.set_sensitivity(
+            mode=self._sensitivity_mode,
+            manual_threshold=self._manual_threshold,
+            pause_threshold=self._pause_threshold,
+        )
+
+        if was_running:
+            self._capture.start(self._audio_callback)
+            with self._lock:
+                self._running = True
+
+        with self._lock:
+            self._status = f"Environment recalibrated ({seconds:.1f}s)"
+            return self._status
+
     def stop(self) -> str:
         with self._lock:
             if not self._running:
@@ -96,3 +149,7 @@ class AppController:
                 "\n".join(self._original_lines),
                 "\n".join(self._translated_lines),
             )
+
+    def settings_snapshot(self) -> tuple[str, int, float]:
+        with self._lock:
+            return self._sensitivity_mode, self._manual_threshold, self._pause_threshold
