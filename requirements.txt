@@ -1,4 +1,5 @@
 speechrecognition==3.14.3
 pyaudio==0.2.14
 deep-translator==1.11.4
-gradio==5.49.1
+gradio==5.49.1; python_version >= "3.10"
+gradio==4.44.1; python_version < "3.10"
